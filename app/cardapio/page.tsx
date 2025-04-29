@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import MenuCategories from "@/components/menu-categories"
-import MenuItems from "@/components/menu-items"
+
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function MenuPage() {
@@ -18,11 +18,6 @@ export default function MenuPage() {
         <MenuCategories />
       </Suspense>
 
-      <div className="mt-8">
-        <Suspense fallback={<MenuSkeleton />}>
-          <MenuItems />
-        </Suspense>
-      </div>
     </div>
   )
 }
