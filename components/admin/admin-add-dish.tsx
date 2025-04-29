@@ -8,16 +8,14 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { Upload, X } from "lucide-react"
+import { Upload, X, Plus } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 
 const categories = [
-  { id: "entradas", name: "Entradas" },
-  { id: "principais", name: "Pratos Principais" },
-  { id: "peixes", name: "Peixes e Frutos do Mar" },
-  { id: "carnes", name: "Carnes" },
-  { id: "massas", name: "Massas" },
-  { id: "sobremesas", name: "Sobremesas" },
-  { id: "vinhos", name: "Carta de Vinhos" },
+  { id: "tradicional", name: "Tradicional" },
+  { id: "fitness", name: "Fitness" },
+  { id: "vegetariana", name: "Vegetariana" },
+  { id: "lowcarb", name: "Low Carb" },
 ]
 
 export default function AdminAddDish() {
@@ -28,30 +26,64 @@ export default function AdminAddDish() {
     description: "",
     price: "",
     category: "",
+    ingredients: [] as string[],
+    preparationTime: "",
+    nutritionalInfo: {
+      calories: "",
+      protein: "",
+      carbs: "",
+      fat: "",
+    },
   })
-  const [imagePreview, setImagePreview] = useState(null)
-  const [imageFile, setImageFile] = useState(null)
+  const [newIngredient, setNewIngredient] = useState("")
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    if (name.includes(".")) {
+      const [parent, child] = name.split(".")
+      setFormData((prev) => ({
+        ...prev,
+        [parent]: { ...prev[parent], [child]: value },
+      }))
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }))
+    }
   }
 
-  const handleCategoryChange = (value) => {
+  const handleCategoryChange = (value: string) => {
     setFormData((prev) => ({ ...prev, category: value }))
   }
 
-  const handleImageClick = () => {
-    fileInputRef.current.click()
+  const handleAddIngredient = () => {
+    if (newIngredient.trim()) {
+      setFormData((prev) => ({
+        ...prev,
+        ingredients: [...prev.ingredients, newIngredient.trim()],
+      }))
+      setNewIngredient("")
+    }
   }
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0]
+  const handleRemoveIngredient = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      ingredients: prev.ingredients.filter((_, i) => i !== index),
+    }))
+  }
+
+  const handleImageClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
     if (file) {
       setImageFile(file)
       const reader = new FileReader()
       reader.onloadend = () => {
-        setImagePreview(reader.result)
+        setImagePreview(reader.result as string)
       }
       reader.readAsDataURL(file)
     }
@@ -65,11 +97,19 @@ export default function AdminAddDish() {
     }
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     // Validação básica
-    if (!formData.name || !formData.description || !formData.price || !formData.category) {
+    if (
+      !formData.name ||
+      !formData.description ||
+      !formData.price ||
+      !formData.category ||
+      !formData.ingredients.length ||
+      !formData.preparationTime ||
+      !imageFile
+    ) {
       toast({
         title: "Erro ao adicionar prato",
         description: "Por favor, preencha todos os campos obrigatórios.",
@@ -78,36 +118,75 @@ export default function AdminAddDish() {
       return
     }
 
-    if (!imageFile) {
+    try {
+      // 1. Primeiro, faz o upload da imagem
+      const imageFormData = new FormData()
+      imageFormData.append("image", imageFile)
+      
+      // Aqui você enviaria a imagem para seu backend/storage
+      // const imageResponse = await fetch("/api/upload", {
+      //   method: "POST",
+      //   body: imageFormData,
+      // })
+      // const { imageUrl } = await imageResponse.json()
+
+      // 2. Depois, cria o prato com a URL da imagem
+      const dishData = {
+        ...formData,
+        price: parseFloat(formData.price),
+        preparationTime: parseInt(formData.preparationTime),
+        nutritionalInfo: {
+          calories: parseInt(formData.nutritionalInfo.calories),
+          protein: parseInt(formData.nutritionalInfo.protein),
+          carbs: parseInt(formData.nutritionalInfo.carbs),
+          fat: parseInt(formData.nutritionalInfo.fat),
+        },
+        isAvailable: true,
+        // image: imageUrl, // URL retornada pelo upload
+        image: "/placeholder.svg", // Temporário até implementar o upload
+      }
+
+      // Aqui você enviaria os dados para o backend
+      // const response = await fetch("/api/dishes", {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify(dishData),
+      // })
+
+      console.log("Dados do novo prato:", dishData)
+
+      toast({
+        title: "Prato adicionado com sucesso!",
+        description: `${formData.name} foi adicionado ao cardápio.`,
+      })
+
+      // Limpar o formulário
+      setFormData({
+        name: "",
+        description: "",
+        price: "",
+        category: "",
+        ingredients: [],
+        preparationTime: "",
+        nutritionalInfo: {
+          calories: "",
+          protein: "",
+          carbs: "",
+          fat: "",
+        },
+      })
+      setImagePreview(null)
+      setImageFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    } catch (error) {
+      console.error("Erro ao adicionar prato:", error)
       toast({
         title: "Erro ao adicionar prato",
-        description: "Por favor, selecione uma imagem para o prato.",
+        description: "Ocorreu um erro ao tentar adicionar o prato. Tente novamente.",
         variant: "destructive",
       })
-      return
-    }
-
-    // Aqui você enviaria os dados para o backend
-    // Incluindo o upload da imagem
-    console.log("Dados do novo prato:", formData)
-    console.log("Imagem:", imageFile)
-
-    toast({
-      title: "Prato adicionado com sucesso!",
-      description: `${formData.name} foi adicionado ao cardápio.`,
-    })
-
-    // Limpar o formulário
-    setFormData({
-      name: "",
-      description: "",
-      price: "",
-      category: "",
-    })
-    setImagePreview(null)
-    setImageFile(null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
     }
   }
 
@@ -115,6 +194,7 @@ export default function AdminAddDish() {
     <div className="max-w-2xl mx-auto">
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-4">
+          {/* Informações Básicas */}
           <div>
             <Label htmlFor="name">Nome do Prato *</Label>
             <Input
@@ -122,7 +202,7 @@ export default function AdminAddDish() {
               name="name"
               value={formData.name}
               onChange={handleChange}
-              className="rounded-none mt-1"
+              className="mt-1"
               required
             />
           </div>
@@ -134,7 +214,7 @@ export default function AdminAddDish() {
               name="description"
               value={formData.description}
               onChange={handleChange}
-              className="rounded-none mt-1 min-h-[100px]"
+              className="mt-1 min-h-[100px]"
               required
             />
           </div>
@@ -150,7 +230,7 @@ export default function AdminAddDish() {
                 min="0"
                 value={formData.price}
                 onChange={handleChange}
-                className="rounded-none mt-1"
+                className="mt-1"
                 required
               />
             </div>
@@ -158,7 +238,7 @@ export default function AdminAddDish() {
             <div>
               <Label htmlFor="category">Categoria *</Label>
               <Select value={formData.category} onValueChange={handleCategoryChange} required>
-                <SelectTrigger id="category" className="rounded-none mt-1">
+                <SelectTrigger id="category" className="mt-1">
                   <SelectValue placeholder="Selecione uma categoria" />
                 </SelectTrigger>
                 <SelectContent>
@@ -172,18 +252,130 @@ export default function AdminAddDish() {
             </div>
           </div>
 
+          {/* Ingredientes */}
+          <div>
+            <Label>Ingredientes *</Label>
+            <div className="flex gap-2 mt-1">
+              <Input
+                value={newIngredient}
+                onChange={(e) => setNewIngredient(e.target.value)}
+                placeholder="Digite um ingrediente"
+                className="flex-1"
+              />
+              <Button type="button" onClick={handleAddIngredient}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {formData.ingredients.map((ingredient, index) => (
+                <Badge key={index} variant="secondary" className="px-3 py-1">
+                  {ingredient}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveIngredient(index)}
+                    className="ml-2 hover:text-red-500"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Tempo de Preparo */}
+          <div>
+            <Label htmlFor="preparationTime">Tempo de Preparo (minutos) *</Label>
+            <Input
+              id="preparationTime"
+              name="preparationTime"
+              type="number"
+              min="0"
+              value={formData.preparationTime}
+              onChange={handleChange}
+              className="mt-1"
+              required
+            />
+          </div>
+
+          {/* Informações Nutricionais */}
+          <div>
+            <Label>Informações Nutricionais *</Label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-1">
+              <div>
+                <Label htmlFor="calories" className="text-sm">Calorias (kcal)</Label>
+                <Input
+                  id="calories"
+                  name="nutritionalInfo.calories"
+                  type="number"
+                  min="0"
+                  value={formData.nutritionalInfo.calories}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="protein" className="text-sm">Proteínas (g)</Label>
+                <Input
+                  id="protein"
+                  name="nutritionalInfo.protein"
+                  type="number"
+                  min="0"
+                  value={formData.nutritionalInfo.protein}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="carbs" className="text-sm">Carboidratos (g)</Label>
+                <Input
+                  id="carbs"
+                  name="nutritionalInfo.carbs"
+                  type="number"
+                  min="0"
+                  value={formData.nutritionalInfo.carbs}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="fat" className="text-sm">Gorduras (g)</Label>
+                <Input
+                  id="fat"
+                  name="nutritionalInfo.fat"
+                  type="number"
+                  min="0"
+                  value={formData.nutritionalInfo.fat}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Upload de Imagem */}
           <div>
             <Label>Imagem do Prato *</Label>
             <div
               className="mt-1 border-2 border-dashed border-neutral-300 rounded-sm p-4 text-center cursor-pointer hover:bg-neutral-50 transition-colors"
               onClick={handleImageClick}
             >
-              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageChange} />
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleImageChange}
+              />
 
               {imagePreview ? (
                 <div className="relative">
                   <div className="relative h-48 w-full">
-                    <Image src={imagePreview || "/placeholder.svg"} alt="Preview" fill className="object-contain" />
+                    <Image
+                      src={imagePreview}
+                      alt="Preview"
+                      fill
+                      className="object-contain"
+                    />
                   </div>
                   <Button
                     type="button"
@@ -199,21 +391,23 @@ export default function AdminAddDish() {
                   </Button>
                 </div>
               ) : (
-                <div className="py-8">
-                  <Upload className="h-10 w-10 mx-auto text-neutral-400" />
-                  <p className="mt-2 text-sm text-neutral-500">Clique para selecionar uma imagem</p>
-                  <p className="text-xs text-neutral-400 mt-1">JPG, PNG ou GIF até 5MB</p>
+                <div className="space-y-2">
+                  <Upload className="h-8 w-8 mx-auto text-neutral-400" />
+                  <div className="text-sm text-neutral-600">
+                    Clique para fazer upload ou arraste uma imagem
+                  </div>
+                  <div className="text-xs text-neutral-500">
+                    PNG, JPG ou WEBP (max. 5MB)
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        <div className="pt-4">
-          <Button type="submit" className="rounded-none bg-black text-white hover:bg-neutral-800">
-            Adicionar Prato
-          </Button>
-        </div>
+        <Button type="submit" className="w-full">
+          Adicionar Prato
+        </Button>
       </form>
     </div>
   )

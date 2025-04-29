@@ -12,28 +12,28 @@ const popularItems = [
     name: "Marmita Tradicional P",
     description: "Arroz, feijão, filé de frango grelhado, salada de legumes e farofa",
     price: 16.9,
-    image: "/placeholder.svg?height=300&width=300",
+    image: "/placeholder.svg",
   },
   {
     id: "2",
     name: "Marmita Fitness",
     description: "Arroz integral, peito de frango grelhado, brócolis, cenoura e batata doce",
     price: 20.9,
-    image: "/placeholder.svg?height=300&width=300",
+    image: "/placeholder.svg",
   },
   {
     id: "3",
     name: "Marmita Vegetariana",
     description: "Arroz integral, lentilha, legumes salteados, tofu grelhado e mix de folhas",
     price: 20.9,
-    image: "/placeholder.svg?height=300&width=300",
+    image: "/placeholder.svg",
   },
   {
     id: "4",
     name: "Marmita Executiva",
     description: "Arroz, feijão, filé mignon, batata rústica, farofa e salada especial",
     price: 24.9,
-    image: "/placeholder.svg?height=300&width=300",
+    image: "/placeholder.svg",
   },
 ]
 
