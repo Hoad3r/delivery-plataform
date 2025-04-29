@@ -5,8 +5,8 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/context/cart-context"
 import { motion, AnimatePresence } from "framer-motion"
-import { useState, useRef } from "react"
-import { Check, ShoppingCart, Star, Heart, Plus, Loader2 } from "lucide-react"
+import { useRef, useEffect, useState } from "react"
+import { Check, ShoppingCart, Star, Heart, Plus, Minus, Trash2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { useMenu } from "@/contexts/menu-context"
 import { formatCurrency } from "@/lib/utils"
@@ -15,18 +15,22 @@ import { Badge } from "@/components/ui/badge"
 export default function MenuItems() {
   const searchParams = useSearchParams()
   const categoryFilter = searchParams.get("categoria")
-  const { addItem, cart } = useCart()
-  const [addedItems, setAddedItems] = useState<Record<string, boolean>>({})
+  const { addItem, cart, removeItem } = useCart()
   const containerRef = useRef(null)
   const { dishes, selectedDate, selectedPeriod, getDishAvailability } = useMenu()
+  const [displayedItems, setDisplayedItems] = useState(dishes)
 
-  const filteredItems = categoryFilter && categoryFilter !== "all"
-    ? dishes.filter((item) => item.category === categoryFilter)
-    : dishes
+  // Atualiza os itens exibidos quando a categoria muda
+  useEffect(() => {
+    const filtered = categoryFilter && categoryFilter !== "all"
+      ? dishes.filter((item) => item.category === categoryFilter)
+      : dishes
+    setDisplayedItems(filtered)
+  }, [categoryFilter, dishes])
 
-  const getItemQuantity = (itemId: string) => {
-    const item = cart.find(item => item.id === itemId)
-    return item ? item.quantity : 0
+  const isItemInCart = (itemId: string) => {
+    const found = cart.some(item => item.id === itemId)
+    return found
   }
 
   const handleAddToCart = (item: any) => {
@@ -36,10 +40,10 @@ export default function MenuItems() {
       price: item.price,
       quantity: 1,
     })
-    setAddedItems((prev) => ({
-      ...prev,
-      [item.id]: true,
-    }))
+  }
+
+  const handleRemoveFromCart = (itemId: string) => {
+    removeItem(itemId)
   }
 
   const getCategoryBadge = (category: string) => {
@@ -72,19 +76,20 @@ export default function MenuItems() {
 
   return (
     <div ref={containerRef} className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 min-h-[500px]">
-      <AnimatePresence>
-        {filteredItems.map((dish) => {
+      <AnimatePresence mode="wait">
+        {displayedItems.map((dish) => {
           const availability = getDishAvailability(dish.id)
           const isAvailable = availability && availability.available > 0 && dish.isAvailable
-          const isAdded = addedItems[dish.id]
+          const isAdded = isItemInCart(dish.id)
 
           return (
             <motion.div
               key={dish.id}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.2 }}
+              layout
             >
               <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl">
                 <div className="relative h-72">
@@ -117,11 +122,26 @@ export default function MenuItems() {
                           <Plus className="h-4 w-4 mr-1" />
                           Adicionar
                         </Button>
-                      ) : (
-                        <div className="px-6 py-2 text-sm font-bold bg-primary/10 text-primary rounded-md">
-                          Adicionado
+                      ) : isAdded ? (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-3 bg-primary/10 hover:bg-primary/20 border-primary/20 text-primary"
+                          >
+                            <Check className="h-4 w-4 mr-1" />
+                            Adicionado
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-8 p-0 bg-red-500/10 hover:bg-red-500/20 border-red-500/20 text-red-500"
+                            onClick={() => handleRemoveFromCart(dish.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>

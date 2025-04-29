@@ -5,7 +5,7 @@ import "./globals.css"
 import ClientLayout from "./client-layout"
 import { MenuProvider } from "@/contexts/menu-context"
 import { Toaster } from "@/components/ui/toaster"
-import { CartProvider } from "@/contexts/cart-context"
+import { CartProvider } from "@/context/cart-context"
 
 const inter = Inter({ subsets: ["latin"] })
 
