@@ -121,10 +121,10 @@ export default function MenuItems() {
         exit={{ opacity: 0, scale: 0.9 }}
         transition={{ duration: 0.2 }}
         layout
-        className={isMobileCard ? "min-w-[360px] w-[360px] snap-start pl-8 first:pl-8" : ""}
+        className={isMobileCard ? "min-w-[300px] w-[300px] snap-start pl-4 first:pl-4" : ""}
       >
         <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl h-full">
-          <div className="relative h-64">
+          <div className="relative h-48 sm:h-64">
             <Image
               src={dish.image}
               alt={dish.name}
@@ -133,44 +133,43 @@ export default function MenuItems() {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
             
-            <div className="absolute top-4 left-4 flex flex-col gap-2">
+            <div className="absolute top-2 left-2 sm:top-4 sm:left-4 flex flex-col gap-2">
               {getCategoryBadge(dish.category)}
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 p-6">
-              <h3 className="text-2xl font-bold text-white mb-2">{dish.name}</h3>
-              <p className="text-sm text-white/90 line-clamp-2 mb-4">{dish.description}</p>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-2xl font-bold text-white group-hover:text-[#DB775F] transition-colors duration-300">
+            <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
+              <h3 className="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2">{dish.name}</h3>
+              <p className="text-xs sm:text-sm text-white/90 line-clamp-2 mb-2 sm:mb-4">{dish.description}</p>
+              <div className="flex items-center justify-between gap-2 sm:gap-4">
+                <span className="text-xl sm:text-2xl font-bold text-white group-hover:text-[#DB775F] transition-colors duration-300">
                   {formatCurrency(dish.price)}
                 </span>
                 {!isAdded && isAvailable ? (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-10 px-4 bg-white/10 hover:bg-white/20 border-white/20 text-white hover:text-white shrink-0"
+                    className="h-8 sm:h-10 px-3 sm:px-4 bg-white/10 hover:bg-white/20 border-white/20 text-white hover:text-white shrink-0 text-xs sm:text-sm"
                     onClick={() => handleAddToCart(dish)}
                   >
-                    <Plus className="h-5 w-5 mr-2" />
+                    <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
                     Adicionar
                   </Button>
                 ) : isAdded ? (
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                     <Button
-                      variant="outline"
                       size="sm"
-                      className="h-10 px-4 bg-primary/10 hover:bg-primary/20 border-primary/20 text-primary whitespace-nowrap"
+                      className="h-8 sm:h-10 px-3 sm:px-4 !bg-[#DB775F]/20 hover:!bg-[#DB775F]/30 !text-white hover:!text-white whitespace-nowrap text-xs sm:text-sm"
                     >
-                      <Check className="h-5 w-5 mr-2" />
+                      <Check className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
                       Adicionado
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-10 w-10 p-0 bg-red-500/10 hover:bg-red-500/20 border-red-500/20 text-red-500"
+                      className="h-8 sm:h-10 w-8 sm:w-10 p-0 bg-red-500/10 hover:bg-red-500/20 border-red-500/20 text-red-500"
                       onClick={() => handleRemoveFromCart(dish.id)}
                     >
-                      <Trash2 className="h-5 w-5" />
+                      <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
                     </Button>
                   </div>
                 ) : null}
@@ -194,7 +193,7 @@ export default function MenuItems() {
               </h2>
               <div className="h-[1px] flex-1 bg-[#DB775F]/10"></div>
             </div>
-            <div className="flex overflow-x-auto pb-6 -mx-6 pl-6 pr-8 gap-6 snap-x snap-mandatory scrollbar-hide">
+            <div className="flex overflow-x-auto pb-6 -mx-4 pl-4 pr-4 gap-4 snap-x snap-mandatory scrollbar-hide">
               {displayedItems.map((dish) => renderDishCard(dish, true))}
             </div>
           </section>
@@ -213,7 +212,7 @@ export default function MenuItems() {
                 </h2>
                 <div className="h-[1px] flex-1 bg-[#DB775F]/10"></div>
               </div>
-              <div className="flex overflow-x-auto pb-6 -mx-6 pl-6 pr-8 gap-6 snap-x snap-mandatory scrollbar-hide">
+              <div className="flex overflow-x-auto pb-6 -mx-4 pl-4 pr-4 gap-4 snap-x snap-mandatory scrollbar-hide">
                 {categoryItems.map((dish) => renderDishCard(dish, true))}
               </div>
             </section>

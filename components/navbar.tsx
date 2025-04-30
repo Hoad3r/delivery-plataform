@@ -54,10 +54,10 @@ export default function Navbar() {
         backgroundColor: !isScrolled ? 'transparent' : 'rgba(255, 255, 255, 0.95)'
       }}
     >
-      <div className="container mx-auto px-4">
-        <div className="flex items-center h-20 sm:h-32">
+      <div className="container mx-auto px-3 sm:px-4">
+        <div className="flex items-center justify-between h-20 sm:h-32">
           <Link href="/" className="flex items-center">
-            <div className="relative h-24 w-64 sm:h-28 sm:w-80">
+            <div className="relative h-20 w-48 sm:h-24 sm:w-64">
               <Image 
                 src="/images/logo.png" 
                 alt="Nossa Cozinha" 
@@ -68,21 +68,21 @@ export default function Navbar() {
             </div>
           </Link>
 
-          <div className="flex items-center space-x-2 sm:space-x-4 ml-auto">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/carrinho">
               <Button
                 variant="ghost"
                 size="icon"
-                className={`relative bg-[#DB775F] hover:bg-[#DB775F]/90 text-white h-10 w-10 sm:h-12 sm:w-12`}
+                className={`relative bg-[#DB775F] hover:bg-[#DB775F]/90 text-white h-9 w-9 sm:h-10 sm:w-10`}
               >
-                <ShoppingBag className="h-5 w-5 sm:h-6 sm:w-6" />
+                <ShoppingBag className="h-4 w-4 sm:h-5 sm:w-5" />
                 <AnimatePresence>
                   {totalItems > 0 && (
                     <m.span
                       initial={{ scale: 0.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.5, opacity: 0 }}
-                      className="absolute -top-1 -right-1 bg-white text-[#DB775F] text-xs rounded-full h-5 w-5 sm:h-6 sm:w-6 flex items-center justify-center"
+                      className="absolute -top-1 -right-1 bg-white text-[#DB775F] text-xs rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center"
                     >
                       {totalItems}
                     </m.span>
@@ -96,9 +96,9 @@ export default function Navbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="bg-[#DB775F] hover:bg-[#DB775F]/90 text-white h-10 w-10 sm:h-12 sm:w-12"
+                  className="bg-[#DB775F] hover:bg-[#DB775F]/90 text-white h-9 w-9 sm:h-10 sm:w-10"
                 >
-                  <Menu className="h-5 w-5 sm:h-6 sm:w-6" />
+                  <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-[300px] bg-[#f4f1ea]">
