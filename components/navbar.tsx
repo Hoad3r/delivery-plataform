@@ -8,11 +8,12 @@ import { Menu, ShoppingBag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useCart } from "@/context/cart-context"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion as m, AnimatePresence } from "framer-motion"
 import { useAuth } from "@/context/auth-context"
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
   const { cart } = useCart()
   const { isAuthenticated, logout, user } = useAuth()
@@ -21,17 +22,23 @@ export default function Navbar() {
 
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10)
+      const scrolled = window.scrollY > 10
+      console.log("Scroll position:", window.scrollY, "isScrolled:", scrolled)
+      setIsScrolled(scrolled)
     }
 
+    // Call handleScroll once on mount to set initial state
+    handleScroll()
+    
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  // Determinar se estamos na página inicial
   const isHomePage = pathname === "/"
+  
+  // Debug values
+  console.log("Navbar Debug - isHomePage:", isHomePage, "isScrolled:", isScrolled, "pathname:", pathname)
 
-  // Don't render navbar on admin pages
   if (pathname?.startsWith("/admin")) {
     return null
   }
@@ -39,112 +46,142 @@ export default function Navbar() {
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isHomePage && !isScrolled
-          ? "bg-transparent text-white"
-          : "bg-background/95 backdrop-blur-sm text-black shadow-sm"
+        !isScrolled
+          ? "bg-transparent"
+          : "bg-white/95 backdrop-blur-sm shadow-sm"
       }`}
+      style={{
+        backgroundColor: !isScrolled ? 'transparent' : 'rgba(255, 255, 255, 0.95)'
+      }}
     >
-      <div className="container mx-auto px-2 sm:px-4">
-        <div className="flex items-center justify-between h-16 sm:h-20">
-          <Link href="/" className="flex items-center -ml-3 -my-2 pl-0">
-            <div className="relative h-20 w-60 sm:h-28 sm:w-80 ml-0">
-              <Image src="/images/logo.png" alt="Nossa Cozinha" fill className="object-contain object-left" priority />
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between h-32">
+          <Link href="/" className="flex items-center">
+            <div className="relative h-28 w-80">
+              <Image src="/images/logo.png" alt="Nossa Cozinha" fill className="object-contain" priority />
             </div>
           </Link>
 
-          <div className="flex items-center space-x-1 sm:space-x-3">
+          <div className="flex items-center space-x-4">
             <Link href="/carrinho">
               <Button
                 variant="ghost"
-                size="sm"
-                className={`relative cart-icon ${
-                  isHomePage && !isScrolled ? "bg-white/10 hover:bg-white/20 backdrop-blur-sm" : "hover:bg-primary/10"
+                size="lg"
+                className={`relative bg-[#DB775F] hover:bg-[#DB775F]/90 text-white ${
+                  isHomePage && !isScrolled ? "" : ""
                 }`}
               >
-                <ShoppingBag className="h-4 w-4 sm:h-5 sm:w-5" />
+                <ShoppingBag className="h-6 w-6" />
                 <AnimatePresence>
                   {totalItems > 0 && (
-                    <motion.span
+                    <m.span
                       initial={{ scale: 0.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.5, opacity: 0 }}
-                      className={`absolute -top-1 -right-1 ${
-                        isHomePage && !isScrolled ? "bg-white text-black" : "bg-primary text-primary-foreground"
-                      } text-xs rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center text-[10px] sm:text-xs`}
+                      className="absolute -top-1 -right-1 bg-white text-[#DB775F] text-xs rounded-full h-6 w-6 flex items-center justify-center"
                     >
                       {totalItems}
-                    </motion.span>
+                    </m.span>
                   )}
                 </AnimatePresence>
               </Button>
             </Link>
 
-            <Sheet>
+            <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="sm"
-                  className={
-                    isHomePage && !isScrolled ? "bg-white/10 hover:bg-white/20 backdrop-blur-sm" : "hover:bg-primary/10"
-                  }
+                  size="lg"
+                  className="bg-[#DB775F] hover:bg-[#DB775F]/90 text-white"
                 >
-                  <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-[250px] sm:w-[300px] md:w-[400px] bg-background">
+              <SheetContent side="right" className="w-[300px] bg-[#f4f1ea]">
                 <div className="flex flex-col h-full">
-                  <div className="flex-1 py-8 sm:py-12">
+                  <div className="flex-1 py-8">
                     <div className="mb-8 flex justify-center">
-                      <div className="relative h-28 w-80">
+                      <div className="relative h-40 w-96">
                         <Image src="/images/logo.png" alt="Nossa Cozinha" fill className="object-contain" />
                       </div>
                     </div>
-                    <nav className="flex flex-col items-start space-y-4 sm:space-y-6">
+                    <nav className="space-y-6">
                       <Link
                         href="/"
-                        className={`text-xl sm:text-2xl font-light hover:text-primary transition-colors ${pathname === "/" ? "text-black" : "text-neutral-600"}`}
+                        onClick={() => setIsOpen(false)}
+                        className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
+                          pathname === "/" ? "text-[#95B2A0]" : ""
+                        }`}
                       >
                         Início
                       </Link>
                       <Link
                         href="/cardapio"
-                        className={`text-xl sm:text-2xl font-light hover:text-primary transition-colors ${pathname === "/cardapio" ? "text-black" : "text-neutral-600"}`}
+                        onClick={() => setIsOpen(false)}
+                        className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
+                          pathname === "/cardapio" ? "text-[#95B2A0]" : ""
+                        }`}
                       >
                         Menu
                       </Link>
                       <Link
                         href="/sobre"
-                        className={`text-xl sm:text-2xl font-light hover:text-primary transition-colors ${pathname === "/sobre" ? "text-black" : "text-neutral-600"}`}
+                        onClick={() => setIsOpen(false)}
+                        className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
+                          pathname === "/sobre" ? "text-[#95B2A0]" : ""
+                        }`}
                       >
                         Sobre
                       </Link>
                       <Link
                         href="/contato"
-                        className={`text-xl sm:text-2xl font-light hover:text-primary transition-colors ${pathname === "/contato" ? "text-black" : "text-neutral-600"}`}
+                        onClick={() => setIsOpen(false)}
+                        className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
+                          pathname === "/contato" ? "text-[#95B2A0]" : ""
+                        }`}
                       >
                         Contato
                       </Link>
                       {isAuthenticated ? (
                         <>
-                          {/* Show admin link for admin users */}
-                          {isAuthenticated && user?.role === "admin" ? (
+                          {user?.role === "admin" ? (
                             <Link
                               href="/admin"
-                              className={`text-xl sm:text-2xl font-light hover:text-primary transition-colors ${pathname.startsWith("/admin") ? "text-black" : "text-neutral-600"}`}
+                              onClick={() => setIsOpen(false)}
+                              className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
+                                pathname.startsWith("/admin") ? "text-[#95B2A0]" : ""
+                              }`}
                             >
                               Administração
                             </Link>
                           ) : (
-                            <Link
-                              href="/minha-conta"
-                              className={`text-xl sm:text-2xl font-light hover:text-primary transition-colors ${pathname.startsWith("/minha-conta") ? "text-black" : "text-neutral-600"}`}
-                            >
-                              Minha Conta
-                            </Link>
+                            <>
+                              <Link
+                                href="/minha-conta"
+                                onClick={() => setIsOpen(false)}
+                                className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
+                                  pathname.startsWith("/minha-conta") ? "text-[#95B2A0]" : ""
+                                }`}
+                              >
+                                Minha Conta
+                              </Link>
+                              <Link
+                                href="/meus-pedidos"
+                                onClick={() => setIsOpen(false)}
+                                className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
+                                  pathname.startsWith("/meus-pedidos") ? "text-[#95B2A0]" : ""
+                                }`}
+                              >
+                                Meus Pedidos
+                              </Link>
+                            </>
                           )}
                           <button
-                            onClick={logout}
-                            className="text-xl sm:text-2xl font-light hover:text-primary transition-colors text-neutral-600 text-left"
+                            onClick={() => {
+                              logout()
+                              setIsOpen(false)
+                            }}
+                            className="block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors text-left w-full"
                           >
                             Sair
                           </button>
@@ -152,7 +189,10 @@ export default function Navbar() {
                       ) : (
                         <Link
                           href="/login"
-                          className={`text-xl sm:text-2xl font-light hover:text-primary transition-colors ${pathname === "/login" ? "text-black" : "text-neutral-600"}`}
+                          onClick={() => setIsOpen(false)}
+                          className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
+                            pathname === "/login" ? "text-[#95B2A0]" : ""
+                          }`}
                         >
                           Entrar
                         </Link>
