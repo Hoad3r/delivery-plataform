@@ -48,7 +48,7 @@ export default function AdminAddDish() {
         [parent]: { ...prev[parent], [child]: value },
       }))
     } else {
-      setFormData((prev) => ({ ...prev, [name]: value }))
+    setFormData((prev) => ({ ...prev, [name]: value }))
     }
   }
 
@@ -144,9 +144,9 @@ export default function AdminAddDish() {
         isAvailable: true,
         // image: imageUrl, // URL retornada pelo upload
         image: "/placeholder.svg", // Temporário até implementar o upload
-      }
+    }
 
-      // Aqui você enviaria os dados para o backend
+    // Aqui você enviaria os dados para o backend
       // const response = await fetch("/api/dishes", {
       //   method: "POST",
       //   headers: { "Content-Type": "application/json" },
@@ -155,17 +155,17 @@ export default function AdminAddDish() {
 
       console.log("Dados do novo prato:", dishData)
 
-      toast({
-        title: "Prato adicionado com sucesso!",
-        description: `${formData.name} foi adicionado ao cardápio.`,
-      })
+    toast({
+      title: "Prato adicionado com sucesso!",
+      description: `${formData.name} foi adicionado ao cardápio.`,
+    })
 
-      // Limpar o formulário
-      setFormData({
-        name: "",
-        description: "",
-        price: "",
-        category: "",
+    // Limpar o formulário
+    setFormData({
+      name: "",
+      description: "",
+      price: "",
+      category: "",
         ingredients: [],
         preparationTime: "",
         nutritionalInfo: {
@@ -174,11 +174,11 @@ export default function AdminAddDish() {
           carbs: "",
           fat: "",
         },
-      })
-      setImagePreview(null)
-      setImageFile(null)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""
+    })
+    setImagePreview(null)
+    setImageFile(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
       }
     } catch (error) {
       console.error("Erro ao adicionar prato:", error)
@@ -406,8 +406,8 @@ export default function AdminAddDish() {
         </div>
 
         <Button type="submit" className="w-full">
-          Adicionar Prato
-        </Button>
+            Adicionar Prato
+          </Button>
       </form>
     </div>
   )

@@ -17,12 +17,12 @@ export function Toaster() {
     <ToastProvider>
       {isOpen && (
         <Toast variant={variant} onOpenChange={onOpenChange}>
-          <div className="grid gap-1">
-            {title && <ToastTitle>{title}</ToastTitle>}
+            <div className="grid gap-1">
+              {title && <ToastTitle>{title}</ToastTitle>}
             {description && <ToastDescription>{description}</ToastDescription>}
-          </div>
-          <ToastClose />
-        </Toast>
+            </div>
+            <ToastClose />
+          </Toast>
       )}
       <ToastViewport />
     </ToastProvider>

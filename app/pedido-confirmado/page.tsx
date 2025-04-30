@@ -27,7 +27,7 @@ export default function OrderConfirmedPage() {
     console.log("Montando página de confirmação...")
     // Delay maior para garantir que o carrinho foi limpo e a transição está suave
     const mountTimer = setTimeout(() => {
-      setMounted(true)
+    setMounted(true)
       console.log("Página de confirmação montada")
     }, 1000)
 
@@ -180,7 +180,7 @@ export default function OrderConfirmedPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-neutral-50 p-4 border border-neutral-200 rounded-sm">
+              <div className="bg-neutral-50 p-4 border border-neutral-200 rounded-sm">
                   <h3 className="font-medium mb-2 flex items-center gap-2">
                     <Truck className="h-4 w-4 text-primary" /> Status do Pedido
                   </h3>
@@ -208,11 +208,11 @@ export default function OrderConfirmedPage() {
                     <div className="flex justify-between">
                       <span className="text-neutral-500">Método:</span>
                       <span className="font-medium">PIX</span>
-                    </div>
+                  </div>
                     <div className="flex justify-between">
                       <span className="text-neutral-500">Status:</span>
                       <span className="font-medium text-green-600">Confirmado</span>
-                    </div>
+                  </div>
                   </div>
                 </div>
               </div>

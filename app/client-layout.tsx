@@ -14,7 +14,7 @@ function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isAdminPage = pathname?.startsWith("/admin")
   const isSimpleFooterPage = pathname?.startsWith("/sobre") || pathname?.startsWith("/contato")
-  
+
   return (
     <>
       {!isAdminPage && <Navbar />}

@@ -55,30 +55,34 @@ export default function Navbar() {
       }}
     >
       <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-32">
+        <div className="flex items-center h-20 sm:h-32">
           <Link href="/" className="flex items-center">
-            <div className="relative h-28 w-80">
-              <Image src="/images/logo.png" alt="Nossa Cozinha" fill className="object-contain" priority />
+            <div className="relative h-24 w-64 sm:h-28 sm:w-80">
+              <Image 
+                src="/images/logo.png" 
+                alt="Nossa Cozinha" 
+                fill 
+                className="object-contain object-left" 
+                priority 
+              />
             </div>
           </Link>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4 ml-auto">
             <Link href="/carrinho">
               <Button
                 variant="ghost"
-                size="lg"
-                className={`relative bg-[#DB775F] hover:bg-[#DB775F]/90 text-white ${
-                  isHomePage && !isScrolled ? "" : ""
-                }`}
+                size="icon"
+                className={`relative bg-[#DB775F] hover:bg-[#DB775F]/90 text-white h-10 w-10 sm:h-12 sm:w-12`}
               >
-                <ShoppingBag className="h-6 w-6" />
+                <ShoppingBag className="h-5 w-5 sm:h-6 sm:w-6" />
                 <AnimatePresence>
                   {totalItems > 0 && (
                     <m.span
                       initial={{ scale: 0.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.5, opacity: 0 }}
-                      className="absolute -top-1 -right-1 bg-white text-[#DB775F] text-xs rounded-full h-6 w-6 flex items-center justify-center"
+                      className="absolute -top-1 -right-1 bg-white text-[#DB775F] text-xs rounded-full h-5 w-5 sm:h-6 sm:w-6 flex items-center justify-center"
                     >
                       {totalItems}
                     </m.span>
@@ -91,17 +95,17 @@ export default function Navbar() {
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="lg"
-                  className="bg-[#DB775F] hover:bg-[#DB775F]/90 text-white"
+                  size="icon"
+                  className="bg-[#DB775F] hover:bg-[#DB775F]/90 text-white h-10 w-10 sm:h-12 sm:w-12"
                 >
-                  <Menu className="h-6 w-6" />
+                  <Menu className="h-5 w-5 sm:h-6 sm:w-6" />
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-[300px] bg-[#f4f1ea]">
                 <div className="flex flex-col h-full">
                   <div className="flex-1 py-8">
                     <div className="mb-8 flex justify-center">
-                      <div className="relative h-40 w-96">
+                      <div className="relative h-48 w-[280px] sm:h-56 sm:w-[320px]">
                         <Image src="/images/logo.png" alt="Nossa Cozinha" fill className="object-contain" />
                       </div>
                     </div>
@@ -109,8 +113,8 @@ export default function Navbar() {
                       <Link
                         href="/"
                         onClick={() => setIsOpen(false)}
-                        className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
-                          pathname === "/" ? "text-[#95B2A0]" : ""
+                        className={`block text-xl font-medium text-[#DB775F] hover:text-[#DB775F]/80 transition-colors ${
+                          pathname === "/" ? "text-[#DB775F]/80" : ""
                         }`}
                       >
                         Início
@@ -118,8 +122,8 @@ export default function Navbar() {
                       <Link
                         href="/cardapio"
                         onClick={() => setIsOpen(false)}
-                        className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
-                          pathname === "/cardapio" ? "text-[#95B2A0]" : ""
+                        className={`block text-xl font-medium text-[#DB775F] hover:text-[#DB775F]/80 transition-colors ${
+                          pathname === "/cardapio" ? "text-[#DB775F]/80" : ""
                         }`}
                       >
                         Menu
@@ -127,8 +131,8 @@ export default function Navbar() {
                       <Link
                         href="/sobre"
                         onClick={() => setIsOpen(false)}
-                        className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
-                          pathname === "/sobre" ? "text-[#95B2A0]" : ""
+                        className={`block text-xl font-medium text-[#DB775F] hover:text-[#DB775F]/80 transition-colors ${
+                          pathname === "/sobre" ? "text-[#DB775F]/80" : ""
                         }`}
                       >
                         Sobre
@@ -136,8 +140,8 @@ export default function Navbar() {
                       <Link
                         href="/contato"
                         onClick={() => setIsOpen(false)}
-                        className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
-                          pathname === "/contato" ? "text-[#95B2A0]" : ""
+                        className={`block text-xl font-medium text-[#DB775F] hover:text-[#DB775F]/80 transition-colors ${
+                          pathname === "/contato" ? "text-[#DB775F]/80" : ""
                         }`}
                       >
                         Contato
@@ -148,8 +152,8 @@ export default function Navbar() {
                             <Link
                               href="/admin"
                               onClick={() => setIsOpen(false)}
-                              className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
-                                pathname.startsWith("/admin") ? "text-[#95B2A0]" : ""
+                              className={`block text-xl font-medium text-[#DB775F] hover:text-[#DB775F]/80 transition-colors ${
+                                pathname.startsWith("/admin") ? "text-[#DB775F]/80" : ""
                               }`}
                             >
                               Administração
@@ -159,8 +163,8 @@ export default function Navbar() {
                               <Link
                                 href="/minha-conta"
                                 onClick={() => setIsOpen(false)}
-                                className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
-                                  pathname.startsWith("/minha-conta") ? "text-[#95B2A0]" : ""
+                                className={`block text-xl font-medium text-[#DB775F] hover:text-[#DB775F]/80 transition-colors ${
+                                  pathname.startsWith("/minha-conta") ? "text-[#DB775F]/80" : ""
                                 }`}
                               >
                                 Minha Conta
@@ -168,8 +172,8 @@ export default function Navbar() {
                               <Link
                                 href="/meus-pedidos"
                                 onClick={() => setIsOpen(false)}
-                                className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
-                                  pathname.startsWith("/meus-pedidos") ? "text-[#95B2A0]" : ""
+                                className={`block text-xl font-medium text-[#DB775F] hover:text-[#DB775F]/80 transition-colors ${
+                                  pathname.startsWith("/meus-pedidos") ? "text-[#DB775F]/80" : ""
                                 }`}
                               >
                                 Meus Pedidos
@@ -181,7 +185,7 @@ export default function Navbar() {
                               logout()
                               setIsOpen(false)
                             }}
-                            className="block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors text-left w-full"
+                            className="block text-xl font-medium text-[#DB775F] hover:text-[#DB775F]/80 transition-colors text-left w-full"
                           >
                             Sair
                           </button>
@@ -190,8 +194,8 @@ export default function Navbar() {
                         <Link
                           href="/login"
                           onClick={() => setIsOpen(false)}
-                          className={`block text-xl font-medium text-[#DB775F] hover:text-[#95B2A0] transition-colors ${
-                            pathname === "/login" ? "text-[#95B2A0]" : ""
+                          className={`block text-xl font-medium text-[#DB775F] hover:text-[#DB775F]/80 transition-colors ${
+                            pathname === "/login" ? "text-[#DB775F]/80" : ""
                           }`}
                         >
                           Entrar

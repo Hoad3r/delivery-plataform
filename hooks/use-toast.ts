@@ -36,7 +36,7 @@ const useToastStore = create<ToastStore>((set) => ({
       setTimeout(() => {
         set({ isOpen: false })
       }, toast.duration || 5000)
-    }
+      }
   },
   hideToast: () => set({ isOpen: false }),
 }))
@@ -46,7 +46,7 @@ export const useToast = () => {
   return {
     toast: (props: Partial<ToastState>) => store.showToast(props),
     ...store,
-  }
-}
+      }
+    }
 
 export const toast = (props: Partial<ToastState>) => useToastStore.getState().showToast(props)
