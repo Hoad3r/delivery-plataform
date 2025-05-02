@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function MenuPage() {
   return (
-    <div className="container mx-auto px-4 pt-8">
+    <div className="container mx-auto px-4 pt-8 mt-40">
       <div className="text-center mb-4">
         <h1 className="text-2xl font-medium tracking-tight text-[#DB775F]">Nosso Cardápio</h1>
         <p className="text-neutral-500 mt-1 max-w-2xl mx-auto text-sm">

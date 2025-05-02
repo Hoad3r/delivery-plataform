@@ -45,24 +45,21 @@ export default function Navbar() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 h-28 sm:h-40 ${
         !isScrolled
-          ? "bg-transparent"
-          : "bg-white/95 backdrop-blur-sm shadow-sm"
+          ? "navbar-transparent"
+          : "navbar-scrolled shadow-sm"
       }`}
-      style={{
-        backgroundColor: !isScrolled ? 'transparent' : 'rgba(255, 255, 255, 0.95)'
-      }}
     >
-      <div className="container mx-auto px-3 sm:px-4">
-        <div className="flex items-center justify-between h-20 sm:h-32">
-          <Link href="/" className="flex items-center">
-            <div className="relative h-20 w-48 sm:h-24 sm:w-64">
+      <div className="container mx-auto px-3 sm:px-4 h-full">
+        <div className="flex items-center justify-between h-full">
+          <Link href="/" className="flex items-center h-full">
+            <div className="relative h-20 w-32 sm:h-full sm:w-[190px]">
               <Image 
                 src="/images/logo.png" 
                 alt="Nossa Cozinha" 
                 fill 
-                className="object-contain object-left" 
+                className="object-cover scale-300" 
                 priority 
               />
             </div>
@@ -82,7 +79,7 @@ export default function Navbar() {
                       initial={{ scale: 0.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.5, opacity: 0 }}
-                      className="absolute -top-1 -right-1 bg-white text-[#DB775F] text-xs rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center"
+                      className="absolute -top-1 -right-1 bg-[#f3f1e8] text-[#DB775F] text-xs rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center"
                     >
                       {totalItems}
                     </m.span>
@@ -101,7 +98,7 @@ export default function Navbar() {
                   <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-[300px] bg-[#f4f1ea]">
+              <SheetContent side="right" className="w-[300px] bg-[#f3f1e8]">
                 <div className="flex flex-col h-full">
                   <div className="flex-1 py-8">
                     <div className="mb-8 flex justify-center">

@@ -146,7 +146,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="w-full rounded-none bg-black text-white hover:bg-neutral-800"
+              className="w-full bg-[#2F5F53] text-white border-2 border-[#2F5F53] hover:bg-white hover:text-[#2F5F53] hover:border-[#2F5F53] transition-all duration-300 rounded-full shadow-lg hover:shadow-xl hover:scale-105"
               disabled={isLoading}
             >
               {isLoading ? "Entrando..." : "Entrar"}

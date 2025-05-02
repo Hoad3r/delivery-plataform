@@ -61,7 +61,6 @@ export default function MenuCategories() {
       <div className="hidden md:block relative">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-medium text-[#DB775F]">Categorias</h2>
-          <div className="w-20 h-[1px] bg-[#DB775F]/20"></div>
         </div>
 
         <div className="relative">

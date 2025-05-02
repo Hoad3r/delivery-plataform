@@ -28,7 +28,7 @@ export default function RootLayout({
             <MenuProvider>
               <div className="min-h-screen flex flex-col">
                 <Navbar />
-                <main className="flex-1 pt-32">
+                <main className="min-h-screen">
                   {children}
                 </main>
                 <Footer />
