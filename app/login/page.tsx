@@ -70,7 +70,7 @@ export default function LoginPage() {
         toast({
           title: "Login realizado com sucesso",
           description: user?.role === "admin" ? "Bem-vindo à área administrativa." : "Bem-vindo de volta!",
-          variant: "success",
+          variant: "default",
         })
 
         // Redirect based on role or redirect parameter
