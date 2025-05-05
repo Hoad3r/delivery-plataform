@@ -11,12 +11,25 @@ export default function Home() {
     <main>
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center bg-gradient-to-b from-[#f4f1ea] to-white">
+        {/* Imagem decorativa */}
+        <div
+          className="absolute left-0 w-full pointer-events-none select-none z-20 hidden sm:block"
+          style={{ top: 200, height: 650 }}
+        >
+          <Image
+            src="/images/decor-frame.png"
+            alt="Decoração"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-[#DB775F]/10 rounded-full transform rotate-12"></div>
           <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-[#DB775F]/5 rounded-full transform -rotate-12"></div>
         </div>
 
-        <div className="container mx-auto px-4 z-10 max-w-4xl">
+        <div className="container mx-auto px-0 h-full">
           <m.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
