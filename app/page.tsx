@@ -18,9 +18,10 @@ export default function Home() {
             top: '50%',
             transform: 'translateY(-50%)',
             height: 'min(80vh, 650px)',
-            maxWidth: '1920px',
+            maxWidth: '1400px',
             margin: '0 auto',
-            right: 0
+            right: 0,
+            left: 0
           }}
         >
           <Image
@@ -37,14 +38,14 @@ export default function Home() {
           <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-[#DB775F]/5 rounded-full transform -rotate-12"></div>
         </div>
 
-        <div className="container mx-auto px-4 h-full relative z-30">
+        <div className="container mx-auto px-4 h-full relative z-30 max-w-[1400px]">
           <m.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
             className="text-center space-y-6 py-20"
           >
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-light tracking-tight text-[#2F5F53]">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-light tracking-tight text-[#2F5F53] max-w-[1200px] mx-auto">
               Culinária refinada, <br />
               <span className="text-[#DB775F]">na sua casa</span>
             </h1>
@@ -97,7 +98,7 @@ export default function Home() {
             <Image src="/images/broccoli.png" alt="Brócolis" fill className="object-contain" />
           </div>
         </div>
-        <div className="container mx-auto px-3 sm:px-4 max-w-5xl relative z-10">
+        <div className="container mx-auto px-3 sm:px-4 max-w-[1200px] relative z-10">
           <div className="grid md:grid-cols-2 gap-8 sm:gap-16 items-center">
             <m.div 
               initial={{ opacity: 0, x: -20 }}
@@ -132,7 +133,7 @@ export default function Home() {
 
       {/* Featured Dishes - Elegante e minimalista */}
       <section className="py-16 sm:py-24 bg-gradient-to-b from-white to-[#f4f1ea]">
-        <div className="container mx-auto px-3 sm:px-4 max-w-6xl">
+        <div className="container mx-auto px-3 sm:px-4 max-w-[1200px]">
           <m.div 
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -164,7 +165,7 @@ export default function Home() {
 
       {/* Delivery - Minimalista */}
       <section className="py-16 sm:py-24 bg-[#f4f1ea]">
-        <div className="container mx-auto px-3 sm:px-4 max-w-4xl text-center">
+        <div className="container mx-auto px-3 sm:px-4 max-w-[1000px] text-center">
           <m.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
