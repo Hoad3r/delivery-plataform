@@ -10,11 +10,18 @@ export default function Home() {
   return (
     <main>
       {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center bg-gradient-to-b from-[#f4f1ea] to-white">
-        {/* Imagem decorativa */}
+      <section className="relative min-h-screen flex items-center bg-gradient-to-b from-[#f4f1ea] to-white overflow-hidden">
+        {/* Imagem decorativa - Desktop */}
         <div
-          className="absolute left-0 w-full pointer-events-none select-none z-20 hidden sm:block"
-          style={{ top: 200, height: 650 }}
+          className="absolute left-0 w-full pointer-events-none select-none z-20 hidden lg:block"
+          style={{ 
+            top: '50%',
+            transform: 'translateY(-50%)',
+            height: 'min(80vh, 650px)',
+            maxWidth: '1920px',
+            margin: '0 auto',
+            right: 0
+          }}
         >
           <Image
             src="/images/decor-frame.png"
@@ -24,17 +31,32 @@ export default function Home() {
             priority
           />
         </div>
-        <div className="absolute inset-0 overflow-hidden">
+
+        {/* Imagem decorativa - Mobile */}
+        <div
+          className="absolute inset-0 pointer-events-none select-none z-20 lg:hidden"
+        >
+          <Image
+            src="/delivery_svg.svg"
+            alt=""
+            aria-hidden="true"
+            fill
+            className="object-cover opacity-10"
+            priority
+          />
+        </div>
+
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
           <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-[#DB775F]/10 rounded-full transform rotate-12"></div>
           <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-[#DB775F]/5 rounded-full transform -rotate-12"></div>
         </div>
 
-        <div className="container mx-auto px-0 h-full">
+        <div className="container mx-auto px-4 h-full relative z-30">
           <m.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            className="text-center space-y-6"
+            className="text-center space-y-6 py-20"
           >
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-light tracking-tight text-[#2F5F53]">
               Culinária refinada, <br />

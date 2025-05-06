@@ -120,11 +120,10 @@ export default function MenuItems() {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
         transition={{ duration: 0.2 }}
-        layout
-        className={isMobileCard ? "min-w-[300px] w-[300px] snap-start pl-4 first:pl-4" : ""}
+        className={isMobileCard ? "min-w-[280px] w-[280px] snap-start pl-4 first:pl-4" : ""}
       >
         <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl h-full">
-          <div className="relative h-48 sm:h-64">
+          <div className="relative h-48">
             <Image
               src={dish.image}
               alt={dish.name}
@@ -137,39 +136,39 @@ export default function MenuItems() {
               {getCategoryBadge(dish.category)}
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
-              <h3 className="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2">{dish.name}</h3>
-              <p className="text-xs sm:text-sm text-white/90 line-clamp-2 mb-2 sm:mb-4">{dish.description}</p>
-              <div className="flex items-center justify-between gap-2 sm:gap-4">
-                <span className="text-xl sm:text-2xl font-bold text-white group-hover:text-[#DB775F] transition-colors duration-300">
+            <div className="absolute bottom-0 left-0 right-0 p-4">
+              <h3 className="text-lg font-bold text-white mb-1">{dish.name}</h3>
+              <p className="text-xs text-white/90 line-clamp-2 mb-2">{dish.description}</p>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-lg font-bold text-white group-hover:text-[#DB775F] transition-colors duration-300">
                   {formatCurrency(dish.price)}
                 </span>
                 {!isAdded && isAvailable ? (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 sm:h-10 px-3 sm:px-4 bg-white/10 hover:bg-white/20 border-white/20 text-white hover:text-white shrink-0 text-xs sm:text-sm"
+                    className="h-8 px-3 bg-white/10 hover:bg-white/20 border-white/20 text-white hover:text-white shrink-0 text-xs"
                     onClick={() => handleAddToCart(dish)}
                   >
-                    <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
+                    <Plus className="h-4 w-4 mr-1" />
                     Adicionar
                   </Button>
                 ) : isAdded ? (
-                  <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
                     <Button
                       size="sm"
-                      className="h-8 sm:h-10 px-3 sm:px-4 !bg-[#DB775F]/20 hover:!bg-[#DB775F]/30 !text-white hover:!text-white whitespace-nowrap text-xs sm:text-sm"
+                      className="h-8 px-3 !bg-[#DB775F]/20 hover:!bg-[#DB775F]/30 !text-white hover:!text-white whitespace-nowrap text-xs"
                     >
-                      <Check className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
+                      <Check className="h-4 w-4 mr-1" />
                       Adicionado
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 sm:h-10 w-8 sm:w-10 p-0 bg-red-500/10 hover:bg-red-500/20 border-red-500/20 text-red-500"
+                      className="h-8 w-8 p-0 bg-red-500/10 hover:bg-red-500/20 border-red-500/20 text-red-500"
                       onClick={() => handleRemoveFromCart(dish.id)}
                     >
-                      <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 ) : null}
@@ -223,7 +222,7 @@ export default function MenuItems() {
   }
 
   return (
-    <div ref={containerRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+    <div ref={containerRef} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 mb-12">
       <AnimatePresence mode="wait">
         {displayedItems.length > 0 ? (
           displayedItems.map((dish) => renderDishCard(dish, false))
