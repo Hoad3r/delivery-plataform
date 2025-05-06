@@ -32,20 +32,6 @@ export default function Home() {
           />
         </div>
 
-        {/* Imagem decorativa - Mobile */}
-        <div
-          className="absolute inset-0 pointer-events-none select-none z-20 lg:hidden"
-        >
-          <Image
-            src="/delivery_svg.svg"
-            alt=""
-            aria-hidden="true"
-            fill
-            className="object-cover opacity-10"
-            priority
-          />
-        </div>
-
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
           <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-[#DB775F]/10 rounded-full transform rotate-12"></div>
           <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-[#DB775F]/5 rounded-full transform -rotate-12"></div>
