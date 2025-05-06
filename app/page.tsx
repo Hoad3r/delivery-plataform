@@ -45,11 +45,11 @@ export default function Home() {
             transition={{ duration: 0.8 }}
             className="text-center space-y-6 py-20"
           >
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-light tracking-tight text-[#2F5F53] max-w-[1200px] mx-auto">
+            <h1 className="font-light tracking-tight text-[#2F5F53] max-w-[1200px] mx-auto leading-tight text-[clamp(2.5rem,7vw,4rem)]">
               Culinária refinada, <br />
               <span className="text-[#DB775F]">na sua casa</span>
             </h1>
-            <p className="text-lg sm:text-xl text-neutral-600 max-w-2xl mx-auto">
+            <p className="text-[clamp(1rem,2.5vw,1.5rem)] text-neutral-600 max-w-2xl mx-auto">
               Uma jornada gastronômica que combina sabores autênticos com apresentação impecável, entregue diretamente
               para você
             </p>
@@ -57,7 +57,7 @@ export default function Home() {
               <Link href="/cardapio">
                 <Button
                   size="lg"
-                  className="bg-[#2F5F53] text-white border-2 border-[#2F5F53] hover:bg-white hover:text-[#2F5F53] hover:border-[#2F5F53] transition-all duration-300 text-lg px-8 py-6 rounded-full shadow-lg hover:shadow-xl hover:scale-105"
+                  className="bg-[#2F5F53] text-white border-2 border-[#2F5F53] hover:bg-white hover:text-[#2F5F53] hover:border-[#2F5F53] transition-all duration-300 px-[clamp(2rem,4vw,3rem)] py-[clamp(1rem,2vw,1.5rem)] text-[clamp(1rem,2vw,1.25rem)] rounded-full shadow-lg hover:shadow-xl hover:scale-105 max-w-full"
                 >
                   Explorar Menu
                 </Button>
