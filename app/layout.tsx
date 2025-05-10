@@ -5,8 +5,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/context/auth-context"
 import { CartProvider } from "@/context/cart-context"
 import { MenuProvider } from "@/contexts/menu-context"
-import Navbar from "@/components/navbar"
-import Footer from "@/components/footer"
+import ClientLayout from "./client-layout"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -26,13 +25,9 @@ export default function RootLayout({
         <AuthProvider>
           <CartProvider>
             <MenuProvider>
-              <div className="min-h-screen flex flex-col">
-                <Navbar />
-                <main className="min-h-screen">
-                  {children}
-                </main>
-                <Footer />
-              </div>
+              <ClientLayout>
+                {children}
+              </ClientLayout>
               <Toaster />
             </MenuProvider>
           </CartProvider>

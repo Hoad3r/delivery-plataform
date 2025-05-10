@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Menu, ShoppingBag } from "lucide-react"
+import { Menu, ShoppingBag, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useCart } from "@/context/cart-context"
@@ -210,6 +210,38 @@ export default function Navbar() {
               </SheetContent>
             </Sheet>
           </div>
+        </div>
+      </div>
+    </header>
+  )
+}
+
+export function MinimalCheckoutNavbar() {
+  const [hidden, setHidden] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => {
+      setHidden(window.scrollY > 10)
+    }
+    window.addEventListener("scroll", onScroll)
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
+  return (
+    <header className={`fixed top-0 left-0 right-0 z-10 bg-[#f3f1e8] h-24 flex items-center justify-center shadow-sm transition-all duration-300 ${hidden ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className="flex items-center justify-center h-full w-full max-w-4xl mx-auto px-4">
+        <Link href="/carrinho" className="absolute left-4 sm:left-8 flex items-center gap-2 text-[#2F5F53] hover:text-[#DB775F] transition-colors text-lg font-medium">
+          <ArrowLeft className="h-7 w-7" />
+          <span className="hidden sm:inline">Voltar</span>
+        </Link>
+        <div className="relative h-20 w-56 mx-auto">
+          <Image 
+            src="/images/logo.png" 
+            alt="Nossa Cozinha" 
+            fill 
+            className="object-contain"
+            priority 
+          />
         </div>
       </div>
     </header>

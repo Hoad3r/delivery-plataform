@@ -56,6 +56,9 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [isProcessingOrder, setIsProcessingOrder] = useState(false)
+  const [pixQrCode, setPixQrCode] = useState<string | null>(null)
+  const [pixCode, setPixCode] = useState<string | null>(null)
+  const [isPixPaid, setIsPixPaid] = useState(false)
 
   // Initialize form
   const form = useForm<CheckoutFormValues>({
@@ -105,6 +108,7 @@ export default function CheckoutPage() {
     setIsSubmitting(true)
     setIsProcessingOrder(true)
     console.log("Iniciando submissão do pedido...")
+    console.log("Valor total:", total)
 
     try {
       // Validar campos obrigatórios para usuários não autenticados
@@ -136,30 +140,65 @@ export default function CheckoutPage() {
       console.log("Simulando chamada à API...")
       await new Promise((resolve) => setTimeout(resolve, 2000))
 
-      console.log("Limpando o carrinho...")
-      clearCart()
+      // 1. Chame a API para gerar o pagamento PIX
+      const pixPayload = {
+        amount: Number(total.toFixed(2)),
+        description: `Pedido Nossa Cozinha - ${new Date().toLocaleDateString()}`
+      }
+      
+      console.log("Payload PIX:", pixPayload)
 
-      console.log("Aguardando limpeza do carrinho...")
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      const pixResponse = await fetch('/api/pix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pixPayload),
+      })
 
-      console.log("Redirecionando para página de confirmação...")
-      router.push("/pedido-confirmado")
+      const pixData = await pixResponse.json()
+      console.log("Resposta PIX:", pixData)
+
+      if (!pixResponse.ok) {
+        console.error('Erro PIX:', pixData)
+        toast({
+          title: "Erro ao gerar pagamento PIX",
+          description: pixData.error?.message || "Tente novamente.",
+          variant: "destructive",
+        })
+        setIsSubmitting(false)
+        setIsProcessingOrder(false)
+        return
+      }
+
+      // 2. Exiba o QR Code para o cliente
+      setPixQrCode(pixData.qr_code_base64)
+      setPixCode(pixData.qr_code)
+      setIsProcessingOrder(false)
+      setIsSubmitting(false)
 
       toast({
-        title: "Pedido realizado com sucesso!",
-        description: "Seu pedido foi recebido e está sendo processado.",
+        title: "QR Code PIX gerado",
+        description: "Escaneie o QR Code ou copie o código para pagar.",
       })
     } catch (error) {
       console.error("Erro ao processar pedido:", error)
       setIsProcessingOrder(false)
+      setIsSubmitting(false)
       toast({
         title: "Erro ao processar pedido",
         description: "Ocorreu um erro ao processar seu pedido. Tente novamente.",
         variant: "destructive",
       })
-    } finally {
-      setIsSubmitting(false)
     }
+  }
+
+  const handlePixPaid = async () => {
+    setIsPixPaid(true)
+    clearCart()
+    toast({
+      title: "Pagamento confirmado!",
+      description: "Seu pedido foi recebido e está sendo processado.",
+    })
+    router.push("/pedido-confirmado")
   }
 
   if (isProcessingOrder) {
@@ -186,7 +225,7 @@ export default function CheckoutPage() {
   const total = subtotal + deliveryFee
 
   return (
-    <div className="container mx-auto px-4 py-24 max-w-6xl pt-28">
+    <div className="container mx-auto px-4 py-24 max-w-6xl mt-20 relative z-20">
       <div className="mb-8">
         <h1 className="text-3xl font-light mb-2">Finalizar Pedido</h1>
         <p className="text-neutral-500">Revise seu pedido e escolha as opções de entrega e pagamento.</p>
@@ -584,6 +623,68 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
+
+      {pixQrCode && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-8 max-w-md w-full mx-4">
+            <div className="flex flex-col items-center justify-center text-center space-y-6">
+              <h2 className="text-2xl font-medium">Pague com PIX</h2>
+              
+              <div className="bg-white p-4 rounded-lg shadow-lg">
+                <img src={`data:image/png;base64,${pixQrCode}`} alt="QR Code PIX" className="w-64 h-64" />
+              </div>
+
+              <div className="w-full space-y-4">
+                <div className="bg-neutral-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium mb-2">Código PIX (copie e cole)</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm break-all bg-white p-2 rounded border flex-1">{pixCode}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(pixCode || '')
+                        toast({
+                          title: "Código copiado!",
+                          description: "Cole no seu aplicativo do banco.",
+                        })
+                      }}
+                    >
+                      Copiar
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-sm text-neutral-600">
+                  <p>1. Abra o app do seu banco</p>
+                  <p>2. Escaneie o QR Code ou cole o código</p>
+                  <p>3. Confirme as informações e pague</p>
+                  <p>4. Clique em "Já paguei" abaixo</p>
+                </div>
+
+                <div className="flex gap-4">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setPixQrCode(null)
+                      setPixCode(null)
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    className="flex-1 bg-primary hover:bg-primary/90"
+                    onClick={handlePixPaid}
+                  >
+                    Já paguei
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
