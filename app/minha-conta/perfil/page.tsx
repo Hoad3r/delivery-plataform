@@ -110,6 +110,7 @@ export default function ProfilePage() {
       toast({
         title: "Senha atualizada",
         description: "Sua senha foi alterada com sucesso.",
+        variant: "success"
       })
 
       passwordForm.reset({
