@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { Edit, MoreHorizontal, Trash2, EyeOff, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -18,14 +18,29 @@ import {
 import { useMenu } from "@/contexts/menu-context"
 import { formatCurrency } from "@/lib/utils"
 import { Dish } from "@/types/menu"
+import { collection, getDocs, onSnapshot, QuerySnapshot, DocumentData, doc, updateDoc, deleteDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { useToast } from "@/hooks/use-toast"
 
 export default function AdminDishList() {
-  const { dishes } = useMenu()
+  const [dishes, setDishes] = useState<Dish[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [showInactive, setShowInactive] = useState(false)
   const [editingDish, setEditingDish] = useState<Dish | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [dishToDelete, setDishToDelete] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<Partial<Dish> | null>(null)
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const { toast } = useToast()
+
+  // Buscar pratos do Firestore
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "dishes"), (snapshot: QuerySnapshot<DocumentData>) => {
+      const pratos: Dish[] = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.data().id }))
+      setDishes(pratos)
+    })
+    return () => unsubscribe()
+  }, [])
 
   const filteredDishes = dishes.filter((dish) => {
     const matchesSearch = dish.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -33,16 +48,82 @@ export default function AdminDishList() {
     return matchesSearch && matchesStatus
   })
 
-  const handleToggleActive = (id: string) => {
-    // Em um app real, isso seria uma chamada à API
-    console.log("Toggle active dish:", id)
+  const handleToggleActive = async (id: string, currentStatus: boolean) => {
+    try {
+      // Buscar o documento pelo campo id
+      const snapshot = await getDocs(collection(db, "dishes"));
+      const dishDoc = snapshot.docs.find(docSnap => docSnap.data().id === id);
+      if (dishDoc) {
+        await updateDoc(doc(db, "dishes", dishDoc.id), {
+          isAvailable: !currentStatus
+        });
+        toast({
+          title: !currentStatus ? "Prato ativado" : "Prato desativado",
+          description: !currentStatus ? "O prato foi ativado com sucesso." : "O prato foi desativado com sucesso.",
+          variant: !currentStatus ? "success" : "destructive"
+        })
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar disponibilidade do prato:", error);
+    }
   }
 
-  const handleDeleteDish = () => {
-    // Em um app real, isso seria uma chamada à API
-    console.log("Delete dish:", dishToDelete)
+  const handleDeleteDish = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, "dishes"));
+      const dishDoc = snapshot.docs.find(docSnap => docSnap.data().id === dishToDelete);
+      if (dishDoc) {
+        await deleteDoc(doc(db, "dishes", dishDoc.id));
+        toast({
+          title: "Prato removido",
+          description: "O prato foi removido com sucesso.",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error("Erro ao remover prato:", error)
+    }
     setIsDeleteDialogOpen(false)
     setDishToDelete(null)
+  }
+
+  // Função para abrir modal de edição com dados do prato
+  const openEditModal = (dish: Dish) => {
+    setEditingDish(dish)
+    setEditForm({ ...dish })
+  }
+
+  // Função para salvar edição
+  const handleEditSave = async () => {
+    if (!editForm || !editForm.id) return
+    setIsSavingEdit(true)
+    try {
+      // Buscar o documento pelo campo id
+      const snapshot = await getDocs(collection(db, "dishes"));
+      const dishDoc = snapshot.docs.find(docSnap => docSnap.data().id === editForm.id);
+      if (dishDoc) {
+        await updateDoc(doc(db, "dishes", dishDoc.id), {
+          name: editForm.name,
+          description: editForm.description,
+          price: editForm.price,
+          category: editForm.category,
+          ingredients: editForm.ingredients,
+          preparationTime: editForm.preparationTime,
+          nutritionalInfo: editForm.nutritionalInfo,
+        });
+        toast({
+          title: "Prato editado",
+          description: "As alterações foram salvas com sucesso.",
+          variant: "success"
+        })
+      }
+      setEditingDish(null)
+      setEditForm(null)
+    } catch (error) {
+      console.error("Erro ao editar prato:", error)
+    } finally {
+      setIsSavingEdit(false)
+    }
   }
 
   return (
@@ -111,10 +192,10 @@ export default function AdminDishList() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setEditingDish(dish)}>
+                      <DropdownMenuItem onClick={() => openEditModal(dish)}>
                         <Edit className="h-4 w-4 mr-2" /> Editar
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleToggleActive(dish.id)}>
+                      <DropdownMenuItem onClick={() => handleToggleActive(dish.id, dish.isAvailable)}>
                         {dish.isAvailable ? (
                           <>
                             <EyeOff className="h-4 w-4 mr-2" /> Desativar
@@ -156,10 +237,10 @@ export default function AdminDishList() {
                 </span>
               </div>
               <div className="col-span-2 hidden md:flex justify-end space-x-2">
-                <Button variant="outline" size="sm" onClick={() => setEditingDish(dish)}>
+                <Button variant="outline" size="sm" onClick={() => openEditModal(dish)}>
                   <Edit className="h-4 w-4 mr-2" /> Editar
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => handleToggleActive(dish.id)}>
+                <Button variant="outline" size="sm" onClick={() => handleToggleActive(dish.id, dish.isAvailable)}>
                   {dish.isAvailable ? (
                     <>
                       <EyeOff className="h-4 w-4 mr-2" /> Desativar
@@ -209,19 +290,87 @@ export default function AdminDishList() {
 
       {/* Edit Dish Dialog - Simplificado para este exemplo */}
       {editingDish && (
-        <Dialog open={!!editingDish} onOpenChange={() => setEditingDish(null)}>
+        <Dialog open={!!editingDish} onOpenChange={() => { setEditingDish(null); setEditForm(null); }}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Editar Prato</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <p className="text-sm text-neutral-500">
-                Aqui você poderia editar os detalhes do prato "{editingDish.name}". Em uma implementação completa, este
-                seria um formulário com todos os campos.
-              </p>
+              <label className="block text-sm">Nome</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={editForm?.name || ""}
+                onChange={e => setEditForm(f => ({ ...f!, name: e.target.value }))}
+              />
+              <label className="block text-sm">Descrição</label>
+              <textarea
+                className="w-full border rounded px-2 py-1"
+                value={editForm?.description || ""}
+                onChange={e => setEditForm(f => ({ ...f!, description: e.target.value }))}
+              />
+              <label className="block text-sm">Preço</label>
+              <input
+                type="number"
+                className="w-full border rounded px-2 py-1"
+                value={editForm?.price || ""}
+                onChange={e => setEditForm(f => ({ ...f!, price: Number(e.target.value) }))}
+              />
+              <label className="block text-sm">Categoria</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={editForm?.category || ""}
+                onChange={e => setEditForm(f => ({ ...f!, category: e.target.value }))}
+              />
+              <label className="block text-sm">Ingredientes (separados por vírgula)</label>
+              <input
+                className="w-full border rounded px-2 py-1"
+                value={editForm?.ingredients?.join(", ") || ""}
+                onChange={e => setEditForm(f => ({ ...f!, ingredients: e.target.value.split(",").map(i => i.trim()) }))}
+              />
+              <label className="block text-sm">Tempo de preparo (min)</label>
+              <input
+                type="number"
+                className="w-full border rounded px-2 py-1"
+                value={editForm?.preparationTime || ""}
+                onChange={e => setEditForm(f => ({ ...f!, preparationTime: Number(e.target.value) }))}
+              />
+              <label className="block text-sm">Informações Nutricionais (calorias, proteína, carboidratos, gordura)</label>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  placeholder="Calorias"
+                  className="border rounded px-2 py-1"
+                  value={editForm?.nutritionalInfo?.calories || ""}
+                  onChange={e => setEditForm(f => ({ ...f!, nutritionalInfo: { ...f!.nutritionalInfo, calories: Number(e.target.value) } }))}
+                />
+                <input
+                  type="number"
+                  placeholder="Proteína"
+                  className="border rounded px-2 py-1"
+                  value={editForm?.nutritionalInfo?.protein || ""}
+                  onChange={e => setEditForm(f => ({ ...f!, nutritionalInfo: { ...f!.nutritionalInfo, protein: Number(e.target.value) } }))}
+                />
+                <input
+                  type="number"
+                  placeholder="Carboidratos"
+                  className="border rounded px-2 py-1"
+                  value={editForm?.nutritionalInfo?.carbs || ""}
+                  onChange={e => setEditForm(f => ({ ...f!, nutritionalInfo: { ...f!.nutritionalInfo, carbs: Number(e.target.value) } }))}
+                />
+                <input
+                  type="number"
+                  placeholder="Gordura"
+                  className="border rounded px-2 py-1"
+                  value={editForm?.nutritionalInfo?.fat || ""}
+                  onChange={e => setEditForm(f => ({ ...f!, nutritionalInfo: { ...f!.nutritionalInfo, fat: Number(e.target.value) } }))}
+                />
+              </div>
             </div>
             <DialogFooter>
-              <Button onClick={() => setEditingDish(null)}>Fechar</Button>
+              <Button onClick={() => { setEditingDish(null); setEditForm(null); }} variant="outline">Cancelar</Button>
+              <Button onClick={handleEditSave} disabled={isSavingEdit}>
+                {isSavingEdit ? "Salvando..." : "Salvar"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

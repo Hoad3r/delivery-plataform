@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast"
 import { Upload, X, Plus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { collection, addDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 const categories = [
   { id: "tradicional", name: "Tradicional" },
@@ -20,7 +22,7 @@ const categories = [
 
 export default function AdminAddDish() {
   const { toast } = useToast()
-  const fileInputRef = useRef(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -45,10 +47,10 @@ export default function AdminAddDish() {
       const [parent, child] = name.split(".")
       setFormData((prev) => ({
         ...prev,
-        [parent]: { ...prev[parent], [child]: value },
+        [parent]: { ...(prev as any)[parent], [child]: value },
       }))
     } else {
-    setFormData((prev) => ({ ...prev, [name]: value }))
+      setFormData((prev) => ({ ...prev, [name]: value }))
     }
   }
 
@@ -74,7 +76,7 @@ export default function AdminAddDish() {
   }
 
   const handleImageClick = () => {
-    fileInputRef.current?.click()
+    if (fileInputRef.current) fileInputRef.current.click()
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,21 +121,20 @@ export default function AdminAddDish() {
     }
 
     try {
-      // 1. Primeiro, faz o upload da imagem
-      const imageFormData = new FormData()
-      imageFormData.append("image", imageFile)
-      
-      // Aqui você enviaria a imagem para seu backend/storage
-      // const imageResponse = await fetch("/api/upload", {
-      //   method: "POST",
-      //   body: imageFormData,
-      // })
-      // const { imageUrl } = await imageResponse.json()
+      // 1. Primeiro, faz o upload da imagem (mantém mock por enquanto)
+      // ...
 
-      // 2. Depois, cria o prato com a URL da imagem
+      // 2. Gera um id único para o prato
+      const generatedId = Date.now().toString();
+
+      // 3. Cria o prato com a URL da imagem
       const dishData = {
-        ...formData,
+        id: generatedId,
+        name: formData.name,
+        description: formData.description,
         price: parseFloat(formData.price),
+        category: formData.category,
+        ingredients: formData.ingredients,
         preparationTime: parseInt(formData.preparationTime),
         nutritionalInfo: {
           calories: parseInt(formData.nutritionalInfo.calories),
@@ -142,30 +143,24 @@ export default function AdminAddDish() {
           fat: parseInt(formData.nutritionalInfo.fat),
         },
         isAvailable: true,
-        // image: imageUrl, // URL retornada pelo upload
-        image: "/placeholder.svg", // Temporário até implementar o upload
-    }
+        image: "/placeholder.svg", // Trocar pelo upload real depois
+      }
 
-    // Aqui você enviaria os dados para o backend
-      // const response = await fetch("/api/dishes", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify(dishData),
-      // })
+      // 4. Salva no Firestore
+      await addDoc(collection(db, 'dishes'), dishData);
 
-      console.log("Dados do novo prato:", dishData)
+      toast({
+        title: "Prato adicionado com sucesso!",
+        description: `${formData.name} foi adicionado ao cardápio.`,
+        variant: "success"
+      })
 
-    toast({
-      title: "Prato adicionado com sucesso!",
-      description: `${formData.name} foi adicionado ao cardápio.`,
-    })
-
-    // Limpar o formulário
-    setFormData({
-      name: "",
-      description: "",
-      price: "",
-      category: "",
+      // Limpar o formulário
+      setFormData({
+        name: "",
+        description: "",
+        price: "",
+        category: "",
         ingredients: [],
         preparationTime: "",
         nutritionalInfo: {
@@ -174,11 +169,11 @@ export default function AdminAddDish() {
           carbs: "",
           fat: "",
         },
-    })
-    setImagePreview(null)
-    setImageFile(null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
+      })
+      setImagePreview(null)
+      setImageFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
       }
     } catch (error) {
       console.error("Erro ao adicionar prato:", error)
