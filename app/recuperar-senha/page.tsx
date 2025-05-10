@@ -1,61 +1,80 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import Link from "next/link"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
+import { useState } from "react";
+import Link from "next/link";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { fetchSignInMethodsForEmail, sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
-import { Button } from "@/components/ui/button"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { useToast } from "@/hooks/use-toast"
+import { Button } from "@/components/ui/button";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
-// Define validation schema
 const forgotPasswordSchema = z.object({
-  email: z.string().email("Email inválido"),
-})
+  email: z.string().email("Email inválido").min(1, "Email é obrigatório"),
+});
 
-type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>
+type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 
 export default function ForgotPasswordPage() {
-  const { toast } = useToast()
-  const [isLoading, setIsLoading] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
-  // Initialize form
   const form = useForm<ForgotPasswordFormValues>({
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: {
       email: "",
     },
-  })
+  });
 
-  // Handle form submission
   async function onSubmit(values: ForgotPasswordFormValues) {
-    setIsLoading(true)
-
+    setIsLoading(true);
+  
     try {
-      // Simulate API call to request password reset
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      // Show success message
+      console.log("Tentando enviar email de recuperação para:", values.email);
+      
+      // Tenta enviar o email de recuperação diretamente
+      await sendPasswordResetEmail(auth, values.email);
+      console.log("Email de recuperação enviado com sucesso");
+  
       toast({
-        title: "Email enviado",
+        title: "Sucesso",
         description: "As instruções para redefinir sua senha foram enviadas para seu email.",
-      })
-
-      setSubmitted(true)
-    } catch (error) {
+        variant: "default",
+      });
+  
+      setSubmitted(true);
+    } catch (error: unknown) {
+      console.error("Erro ao enviar email de recuperação:", error);
+  
+      let errorMessage = "Ocorreu um erro ao tentar enviar o email de recuperação.";
+  
+      if (error instanceof Error) {
+        console.log("Tipo de erro:", error.message);
+        
+        if (error.message === "auth/invalid-email") {
+          errorMessage = "O email fornecido é inválido.";
+        } else if (error.message === "auth/too-many-requests") {
+          errorMessage = "Muitas tentativas. Por favor, tente novamente mais tarde.";
+        } else if (error.message === "auth/user-not-found") {
+          errorMessage = "Não encontramos uma conta cadastrada com este email.";
+        }
+      }
+  
       toast({
-        title: "Erro ao processar solicitação",
-        description: "Ocorreu um erro ao tentar enviar o email de recuperação.",
+        title: "Erro",
+        description: errorMessage,
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
+  
 
   return (
     <div className="container mx-auto px-4 py-24 flex items-center justify-center min-h-screen">
@@ -64,7 +83,6 @@ export default function ForgotPasswordPage() {
           <h1 className="text-3xl font-light mb-2">Recuperar Senha</h1>
           <p className="text-neutral-500">Enviaremos instruções para seu email</p>
         </div>
-
         <div className="border border-neutral-200 p-8">
           {submitted ? (
             <div className="text-center py-4">
@@ -114,7 +132,6 @@ export default function ForgotPasswordPage() {
                     </FormItem>
                   )}
                 />
-
                 <Button
                   type="submit"
                   className="w-full rounded-none bg-black text-white hover:bg-neutral-800"
@@ -126,7 +143,6 @@ export default function ForgotPasswordPage() {
             </Form>
           )}
         </div>
-
         <div className="text-center mt-6">
           <p className="text-sm text-neutral-500">
             Lembrou sua senha?{" "}
@@ -137,6 +153,5 @@ export default function ForgotPasswordPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
-
