@@ -42,7 +42,7 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList className="grid grid-cols-6 mb-6 md:mb-8 h-auto">
+        <TabsList className="grid grid-cols-5 mb-6 md:mb-8 h-auto">
           <TabsTrigger value="dashboard" className="text-xs md:text-sm py-2 px-1 md:py-3 md:px-4">
             Dashboard
           </TabsTrigger>
@@ -57,9 +57,6 @@ export default function AdminPage() {
           </TabsTrigger>
           <TabsTrigger value="add" className="text-xs md:text-sm py-2 px-1 md:py-3 md:px-4">
             Adicionar Prato
-          </TabsTrigger>
-          <TabsTrigger value="schedule" className="text-xs md:text-sm py-2 px-1 md:py-3 md:px-4">
-            Programação
           </TabsTrigger>
         </TabsList>
 
@@ -81,10 +78,6 @@ export default function AdminPage() {
 
         <TabsContent value="add">
           <AdminAddDish />
-        </TabsContent>
-
-        <TabsContent value="schedule">
-          <AdminSchedule />
         </TabsContent>
       </Tabs>
     </div>
