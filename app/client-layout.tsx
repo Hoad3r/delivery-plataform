@@ -14,12 +14,13 @@ function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isAdminPage = pathname?.startsWith("/admin")
   const isSimpleFooterPage = pathname?.startsWith("/sobre") || pathname?.startsWith("/contato")
+  const isCheckout = pathname.startsWith("/checkout")
 
   return (
     <>
-      {!isAdminPage && <Navbar />}
+      {!isCheckout && !isAdminPage && <Navbar />}
       {children}
-      {!isAdminPage && (
+      {!isCheckout && !isAdminPage && (
         isSimpleFooterPage ? (
           <footer className="bg-neutral-900 text-white py-6">
             <div className="container mx-auto px-3 sm:px-4 text-center">
@@ -41,6 +42,8 @@ export default function ClientLayout({
 }: {
   children: React.ReactNode
 }) {
+  const pathname = usePathname()
+  const isCheckout = pathname.startsWith("/checkout")
   return (
     <AuthProvider>
       <CartProvider>
