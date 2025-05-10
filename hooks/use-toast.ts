@@ -13,7 +13,7 @@ interface ToastState {
   isOpen: boolean
   title?: string
   description?: string
-  variant?: "default" | "destructive"
+  variant?: "default" | "destructive" | "success"
   duration?: number
   onOpenChange: (open: boolean) => void
 }

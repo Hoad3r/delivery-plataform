@@ -243,222 +243,16 @@ export default function PaymentMethodsPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-light">Métodos de Pagamento</h2>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              variant="outline"
-              className="rounded-none border-black text-black hover:bg-black hover:text-white"
-              onClick={() => setEditingPayment(null)}
-            >
-              <Plus className="h-4 w-4 mr-2" /> Adicionar Cartão
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[550px]">
-            <DialogHeader>
-              <DialogTitle>{editingPayment ? "Editar Cartão" : "Adicionar Cartão"}</DialogTitle>
-              <DialogDescription>
-                Preencha os campos abaixo para {editingPayment ? "atualizar seu" : "adicionar um novo"} cartão.
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-                <FormField
-                  control={form.control}
-                  name="nickname"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome do Cartão</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="Ex: Cartão Pessoal, Cartão do Trabalho"
-                          className="rounded-none"
-                          disabled={isLoading}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="space-y-2">
-                  <FormLabel>Tipo de Cartão</FormLabel>
-                  <RadioGroup
-                    value={cardType}
-                    onValueChange={(value: "credit" | "debit") => setCardType(value)}
-                    className="flex space-x-4"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="credit" id="type-credit" />
-                      <FormLabel htmlFor="type-credit" className="font-normal cursor-pointer">
-                        Crédito
-                      </FormLabel>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="debit" id="type-debit" />
-                      <FormLabel htmlFor="type-debit" className="font-normal cursor-pointer">
-                        Débito
-                      </FormLabel>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="cardNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Número do Cartão</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="0000 0000 0000 0000"
-                          className="rounded-none"
-                          disabled={isLoading}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="cardholderName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome no Cartão</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="Nome como aparece no cartão"
-                          className="rounded-none"
-                          disabled={isLoading}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="expiryMonth"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Mês</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
-                          <FormControl>
-                            <SelectTrigger className="rounded-none">
-                              <SelectValue placeholder="MM" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {monthOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="expiryYear"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ano</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
-                          <FormControl>
-                            <SelectTrigger className="rounded-none">
-                              <SelectValue placeholder="AAAA" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {yearOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="cvv"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>CVV</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            className="rounded-none"
-                            placeholder="123"
-                            maxLength={4}
-                            disabled={isLoading}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="isDefault"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                      <FormControl>
-                        <RadioGroup
-                          onValueChange={(value) => field.onChange(value === "true")}
-                          defaultValue={field.value ? "true" : "false"}
-                          className="flex flex-row space-x-3"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="true" id="default-yes" />
-                            <FormLabel htmlFor="default-yes" className="font-normal cursor-pointer">
-                              Sim
-                            </FormLabel>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="false" id="default-no" />
-                            <FormLabel htmlFor="default-no" className="font-normal cursor-pointer">
-                              Não
-                            </FormLabel>
-                          </div>
-                        </RadioGroup>
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Cartão padrão</FormLabel>
-                        <p className="text-sm text-muted-foreground">Definir como cartão padrão para pagamentos</p>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                <DialogFooter>
-                  <Button
-                    type="submit"
-                    className="rounded-none bg-black text-white hover:bg-neutral-800"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? "Salvando..." : "Salvar Cartão"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+        <Button
+          variant="outline"
+          className="rounded-none border-black text-black opacity-50 cursor-not-allowed"
+          disabled
+        >
+          <Plus className="h-4 w-4 mr-2" /> Adicionar Cartão (desativado)
+        </Button>
+      </div>
+      <div className="mb-6 p-4 bg-yellow-100 text-yellow-800 rounded">
+        <strong>Atenção:</strong> No momento, só aceitamos pagamentos via <b>PIX</b>. O cadastro de cartões está temporariamente desativado.
       </div>
 
       {paymentMethods.length === 0 ? (
@@ -466,18 +260,8 @@ export default function PaymentMethodsPage() {
           <CreditCard className="h-10 w-10 text-neutral-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium mb-2">Nenhum cartão cadastrado</h3>
           <p className="text-neutral-500 mb-6">
-            Você ainda não possui cartões cadastrados. Adicione seu primeiro cartão para facilitar seus pagamentos.
+            O cadastro de cartões está temporariamente desativado. Aceitamos apenas pagamentos via PIX.
           </p>
-          <Button
-            variant="outline"
-            className="rounded-none border-black text-black hover:bg-black hover:text-white"
-            onClick={() => {
-              setEditingPayment(null)
-              setDialogOpen(true)
-            }}
-          >
-            Adicionar Cartão
-          </Button>
         </div>
       ) : (
         <div className="space-y-4">

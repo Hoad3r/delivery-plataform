@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsAuthenticated(false)
         setAddresses([])
         setPaymentMethods([])
-      }
+        }
     })
 
     return () => unsubscribe()
@@ -151,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       await signInWithEmailAndPassword(auth, email, password)
-      return true
+        return true
     } catch (error) {
       console.error("Erro ao fazer login:", error)
       return false
@@ -163,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await signOut(auth)
     } catch (error) {
       console.error("Erro ao fazer logout:", error)
-    }
+  }
   }
 
   const updateProfile = async (userData: any): Promise<boolean> => {
@@ -184,14 +184,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         notifications: userData.notifications
       })
 
-      setUser({
-        ...user,
-        name: userData.name,
-        phone: userData.phone,
+        setUser({
+          ...user,
+          name: userData.name,
+          phone: userData.phone,
         notifications: userData.notifications
-      })
+        })
 
-      return true
+        return true
     } catch (error) {
       console.error("Erro ao atualizar perfil:", error)
       return false
@@ -211,7 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Atualizar a senha
       await updateFirebasePassword(auth.currentUser, newPassword)
-      return true
+        return true
     } catch (error) {
       console.error("Erro ao atualizar senha:", error)
       return false

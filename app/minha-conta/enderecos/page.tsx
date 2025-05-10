@@ -131,6 +131,29 @@ export default function AddressesPage() {
 
     try {
       if (editingAddress) {
+        // Verifica se houve alteração
+        const isSame = (
+          values.nickname === editingAddress.nickname &&
+          values.street === editingAddress.street &&
+          values.number === editingAddress.number &&
+          (values.complement || "") === (editingAddress.complement || "") &&
+          values.neighborhood === editingAddress.neighborhood &&
+          values.city === editingAddress.city &&
+          values.state === editingAddress.state &&
+          values.zipcode === editingAddress.zipcode &&
+          (values.isDefault || false) === (editingAddress.isDefault || false)
+        )
+        if (isSame) {
+          toast({
+            title: "Nada alterado",
+            description: "Nenhuma informação do endereço foi modificada.",
+            variant: "default"
+          })
+          setIsLoading(false)
+          setDialogOpen(false)
+          setEditingAddress(null)
+          return
+        }
         // Atualiza endereço no Firestore
         const { isDefault, ...rest } = values;
         let addressToUpdate = { ...rest, isDefault: !!isDefault };
@@ -139,6 +162,7 @@ export default function AddressesPage() {
           toast({
             title: "Endereço atualizado",
             description: `O endereço \"${values.nickname}\" foi atualizado com sucesso.`,
+            variant: "success"
           })
         } else {
           toast({
@@ -189,6 +213,7 @@ export default function AddressesPage() {
       toast({
         title: "Endereço removido",
         description: "Seu endereço foi removido com sucesso.",
+        variant: "destructive"
       });
     } else {
       toast({
