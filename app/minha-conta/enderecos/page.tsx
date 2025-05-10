@@ -55,7 +55,7 @@ type Address = AddressFormValues & {
 
 export default function AddressesPage() {
   const { toast } = useToast()
-  const { user } = useAuth()
+  const { user, addAddress, updateAddress, removeAddress, addresses: dbAddresses } = useAuth()
   const [addresses, setAddresses] = useState<Address[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -81,21 +81,9 @@ export default function AddressesPage() {
 
   // Load addresses
   useEffect(() => {
-    // In a real app, this would fetch from an API
-    // For now, load from localStorage
-    try {
-      const savedAddresses = localStorage.getItem("userAddresses")
-      if (savedAddresses) {
-        const parsedAddresses = JSON.parse(savedAddresses)
-        if (Array.isArray(parsedAddresses)) {
-          setAddresses(parsedAddresses)
-        }
-      }
-    } catch (error) {
-      console.error("Failed to parse addresses from localStorage:", error)
-      setAddresses([])
-    }
-  }, [])
+    // Sempre que dbAddresses mudar, atualiza o estado local
+    setAddresses(dbAddresses as Address[])
+  }, [dbAddresses])
 
   // Save addresses to localStorage when they change
   useEffect(() => {
@@ -143,42 +131,40 @@ export default function AddressesPage() {
 
     try {
       if (editingAddress) {
-        // Update existing address
-        const updatedAddresses = addresses.map((addr) =>
-          addr.id === editingAddress.id
-            ? { ...values, id: addr.id }
-            : values.isDefault
-              ? { ...addr, isDefault: false }
-              : addr,
-        )
-        setAddresses(updatedAddresses)
-
-        toast({
-          title: "Endereço atualizado",
-          description: `O endereço "${values.nickname}" foi atualizado com sucesso.`,
-        })
-      } else {
-        // Add new address
-        const newAddress: Address = {
-          ...values,
-          id: `address_${Date.now()}`,
-        }
-
-        if (values.isDefault) {
-          // If the new address is default, remove default from other addresses
-          const updatedAddresses = addresses.map((addr) => ({
-            ...addr,
-            isDefault: false,
-          }))
-          setAddresses([...updatedAddresses, newAddress])
+        // Atualiza endereço no Firestore
+        const { isDefault, ...rest } = values;
+        let addressToUpdate = { ...rest, isDefault: !!isDefault };
+        const ok = await updateAddress(editingAddress.id, addressToUpdate);
+        if (ok) {
+          toast({
+            title: "Endereço atualizado",
+            description: `O endereço \"${values.nickname}\" foi atualizado com sucesso.`,
+          })
         } else {
-          setAddresses([...addresses, newAddress])
+          toast({
+            title: "Erro",
+            description: "Ocorreu um erro ao atualizar o endereço no banco de dados.",
+            variant: "destructive",
+          })
         }
-
-        toast({
-          title: "Endereço adicionado",
-          description: `O endereço "${values.nickname}" foi adicionado com sucesso.`,
-        })
+      } else {
+        // Adiciona novo endereço no Firestore
+        const { isDefault, ...rest } = values;
+        // Remove isDefault dos outros endereços se necessário
+        let addressToAdd = { ...rest, isDefault: !!isDefault };
+        const ok = await addAddress(addressToAdd);
+        if (ok) {
+          toast({
+            title: "Endereço adicionado",
+            description: `O endereço \"${values.nickname}\" foi adicionado com sucesso.`,
+          })
+        } else {
+          toast({
+            title: "Erro",
+            description: "Ocorreu um erro ao salvar o endereço no banco de dados.",
+            variant: "destructive",
+          })
+        }
       }
 
       // Close dialog and reset form
@@ -196,17 +182,24 @@ export default function AddressesPage() {
   }
 
   // Handle address deletion
-  function handleDeleteAddress(id: string) {
-    const updatedAddresses = addresses.filter((addr) => addr.id !== id)
-    setAddresses(updatedAddresses)
-
-    toast({
-      title: "Endereço removido",
-      description: "Seu endereço foi removido com sucesso.",
-    })
-
-    setDeleteDialogOpen(false)
-    setAddressToDelete(null)
+  async function handleDeleteAddress(id: string) {
+    setIsLoading(true);
+    const ok = await removeAddress(id);
+    if (ok) {
+      toast({
+        title: "Endereço removido",
+        description: "Seu endereço foi removido com sucesso.",
+      });
+    } else {
+      toast({
+        title: "Erro",
+        description: "Ocorreu um erro ao remover o endereço do banco de dados.",
+        variant: "destructive",
+      });
+    }
+    setIsLoading(false);
+    setDeleteDialogOpen(false);
+    setAddressToDelete(null);
   }
 
   // Set address as default
@@ -373,30 +366,26 @@ export default function AddressesPage() {
                   control={form.control}
                   name="isDefault"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                      <FormControl>
+                    <FormItem className="rounded-md border p-4">
+                      <div className="flex flex-row items-center gap-4">
                         <RadioGroup
                           onValueChange={(value) => field.onChange(value === "true")}
-                          defaultValue={field.value ? "true" : "false"}
-                          className="flex flex-row space-x-3"
+                          value={field.value ? "true" : "false"}
+                          className="flex flex-col gap-2"
                         >
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center gap-2">
                             <RadioGroupItem value="true" id="default-yes" />
-                            <FormLabel htmlFor="default-yes" className="font-normal cursor-pointer">
-                              Sim
-                            </FormLabel>
+                            <FormLabel htmlFor="default-yes" className="font-normal cursor-pointer">Sim</FormLabel>
                           </div>
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center gap-2">
                             <RadioGroupItem value="false" id="default-no" />
-                            <FormLabel htmlFor="default-no" className="font-normal cursor-pointer">
-                              Não
-                            </FormLabel>
+                            <FormLabel htmlFor="default-no" className="font-normal cursor-pointer">Não</FormLabel>
                           </div>
                         </RadioGroup>
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Endereço padrão</FormLabel>
-                        <p className="text-sm text-muted-foreground">Definir como endereço padrão para entrega</p>
+                        <div className="flex flex-col justify-center">
+                          <FormLabel className="mb-1">Endereço padrão</FormLabel>
+                          <p className="text-sm text-muted-foreground">Definir como endereço padrão para entrega</p>
+                        </div>
                       </div>
                     </FormItem>
                   )}
@@ -444,7 +433,7 @@ export default function AddressesPage() {
                   <div className="flex items-center mb-2">
                     <h3 className="font-medium">{address.nickname}</h3>
                     {address.isDefault && (
-                      <span className="ml-2 text-xs bg-primary/20 text-primary-foreground px-2 py-0.5 rounded-full">
+                      <span className="ml-2 text-xs bg-primary/90 text-primary-foreground px-2 py-0.5 rounded-full">
                         Padrão
                       </span>
                     )}
