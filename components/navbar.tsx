@@ -45,16 +45,20 @@ export default function Navbar() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 h-16 sm:h-40 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-transparent ${
         !isScrolled
-          ? "navbar-transparent"
-          : "navbar-scrolled shadow-sm"
+          ? "h-16 sm:h-40"
+          : "h-16 shadow-sm"
       }`}
     >
       <div className="w-full h-full px-0">
         <div className="flex items-center justify-between h-full">
           <Link href="/" className="flex items-center h-full ml-0">
-            <div className="relative h-28 w-56 sm:h-56 sm:w-[400px] flex items-center justify-center mt-6 ml-[-50px] sm:mt-0 sm:ml-0">
+            <div className={`relative flex items-center justify-center transition-all duration-300 ${
+              !isScrolled
+                ? "h-28 w-56 sm:h-56 sm:w-[400px] mt-6 ml-[-50px] sm:mt-0 sm:ml-0"
+                : "h-12 w-24 sm:h-12 sm:w-24 mt-0 ml-0"
+            }`}>
               <Image 
                 src="/images/logo.png" 
                 alt="Nossa Cozinha" 
@@ -65,7 +69,9 @@ export default function Navbar() {
             </div>
           </Link>
 
-          <div className="flex items-center gap-2 sm:gap-4 mr-4 sm:mr-8 mt-2 sm:mt-4">
+          <div className={`flex items-center gap-2 sm:gap-4 mr-4 sm:mr-8 transition-all duration-300 ${
+            !isScrolled ? "mt-2 sm:mt-4" : "mt-0"
+          }`}>
             <Link href="/carrinho">
               <Button
                 variant="ghost"
