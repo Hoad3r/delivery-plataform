@@ -1,6 +1,20 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { 
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile as updateFirebaseProfile,
+  onAuthStateChanged,
+  User as FirebaseUser,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword as updateFirebasePassword
+} from 'firebase/auth'
+import { auth } from '@/lib/firebase'
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 
 type User = {
   id: string
@@ -42,7 +56,7 @@ type AuthContextType = {
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<boolean>
   register: (userData: any) => Promise<boolean>
-  logout: () => void
+  logout: () => Promise<void>
   updateProfile: (userData: any) => Promise<boolean>
   updatePassword: (currentPassword: string, newPassword: string) => Promise<boolean>
   addresses: Address[]
@@ -63,328 +77,265 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [addresses, setAddresses] = useState<Address[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
 
-  // Verificar se o usuário já está logado (localStorage)
+  // Observar mudanças no estado de autenticação do Firebase
   useEffect(() => {
-    const storedUser = localStorage.getItem("user")
-    if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser)
-        setUser(parsedUser)
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Buscar dados adicionais do usuário no Firestore
+        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid))
+        const userData = userDoc.data()
+
+        const user: User = {
+          id: firebaseUser.uid,
+          name: firebaseUser.displayName || '',
+          email: firebaseUser.email || '',
+          phone: userData?.phone,
+          role: userData?.role || 'customer',
+          notifications: userData?.notifications || false
+        }
+
+        setUser(user)
         setIsAuthenticated(true)
-      } catch (error) {
-        console.error("Erro ao recuperar usuário:", error)
-        localStorage.removeItem("user")
-      }
-    }
 
-    // Load addresses and payment methods
-    try {
-      // Load addresses
-      const storedAddresses = localStorage.getItem("userAddresses")
-      if (storedAddresses) {
-        const parsedAddresses = JSON.parse(storedAddresses)
-        if (Array.isArray(parsedAddresses)) {
-          setAddresses(parsedAddresses)
+        // Carregar endereços e métodos de pagamento
+        if (userData?.addresses) {
+          setAddresses(userData.addresses)
         }
+        if (userData?.paymentMethods) {
+          setPaymentMethods(userData.paymentMethods)
+        }
+      } else {
+        setUser(null)
+        setIsAuthenticated(false)
+        setAddresses([])
+        setPaymentMethods([])
       }
+    })
 
-      // Load payment methods
-      const storedPaymentMethods = localStorage.getItem("userPaymentMethods")
-      if (storedPaymentMethods) {
-        const parsedPaymentMethods = JSON.parse(storedPaymentMethods)
-        if (Array.isArray(parsedPaymentMethods)) {
-          setPaymentMethods(parsedPaymentMethods)
-        }
-      }
-    } catch (error) {
-      console.error("Error loading data from localStorage:", error)
-    }
+    return () => unsubscribe()
   }, [])
 
-  // Save user to localStorage whenever it changes
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem("user", JSON.stringify(user))
-    }
-  }, [user])
-
-  // Save addresses to localStorage when they change
-  useEffect(() => {
-    try {
-      if (addresses && addresses.length > 0) {
-        localStorage.setItem("userAddresses", JSON.stringify(addresses))
-      }
-    } catch (error) {
-      console.error("Error saving addresses to localStorage:", error)
-    }
-  }, [addresses])
-
-  // Save payment methods to localStorage when they change
-  useEffect(() => {
-    try {
-      if (paymentMethods && paymentMethods.length > 0) {
-        localStorage.setItem("userPaymentMethods", JSON.stringify(paymentMethods))
-      }
-    } catch (error) {
-      console.error("Error saving payment methods to localStorage:", error)
-    }
-  }, [paymentMethods])
-
-  // Melhorar a função de registro para salvar mais dados e integrar com o checkout
   const register = async (userData: any): Promise<boolean> => {
     try {
-      // Simulating API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Criar usuário no Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        userData.email,
+        userData.password
+      )
 
-      // Check if user with this email already exists
-      const existingUsers = JSON.parse(localStorage.getItem("users") || "[]")
-      if (existingUsers.some((u) => u.email === userData.email)) {
-        return false
-      }
+      // Atualizar o perfil com o nome
+      await updateFirebaseProfile(userCredential.user, {
+        displayName: userData.name
+      })
 
-      // Create new user
-      const newUser = {
-        id: `user_${Date.now()}`,
+      // Criar documento do usuário no Firestore
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
         name: userData.name,
         email: userData.email,
         phone: userData.phone,
-        role: "customer",
-        createdAt: new Date().toISOString(),
+        role: 'customer',
         notifications: userData.notifications || false,
-      }
-
-      // Save to "database"
-      existingUsers.push(newUser)
-      localStorage.setItem("users", JSON.stringify(existingUsers))
-
-      // Auto-login after registration
-      setUser(newUser)
-      setIsAuthenticated(true)
-      localStorage.setItem("user", JSON.stringify(newUser))
+        addresses: [],
+        paymentMethods: [],
+        createdAt: new Date().toISOString()
+      })
 
       return true
     } catch (error) {
-      console.error("Error registering user:", error)
+      console.error("Erro ao registrar usuário:", error)
       return false
     }
   }
 
-  // Melhorar a função de login para verificar usuários registrados
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // Simulating API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Check admin credentials first
-      if (email === "admin@restaurante.com" && password === "admin123") {
-        const adminUser = {
-          id: "1",
-          name: "Administrador",
-          email: "admin@restaurante.com",
-          role: "admin",
-        }
-
-        setUser(adminUser)
-        setIsAuthenticated(true)
-        localStorage.setItem("user", JSON.stringify(adminUser))
-        return true
-      }
-
-      // For customer login (basic simulation)
-      if (email === "cliente@exemplo.com" && password === "senha123") {
-        const customerUser = {
-          id: "2",
-          name: "João Silva",
-          email: "cliente@exemplo.com",
-          phone: "(11) 98765-4321",
-          role: "customer",
-          notifications: true,
-        }
-
-        setUser(customerUser)
-        setIsAuthenticated(true)
-        localStorage.setItem("user", JSON.stringify(customerUser))
-        return true
-      }
-
-      // Check registered users
-      const existingUsers = JSON.parse(localStorage.getItem("users") || "[]")
-      const foundUser = existingUsers.find((u) => u.email === email)
-
-      if (foundUser) {
-        // In a real app, we would check the password hash
-        // For this demo, we'll just accept any password for registered users
-        setUser(foundUser)
-        setIsAuthenticated(true)
-        localStorage.setItem("user", JSON.stringify(foundUser))
-        return true
-      }
-
-      return false
+      await signInWithEmailAndPassword(auth, email, password)
+      return true
     } catch (error) {
-      console.error("Error logging in:", error)
+      console.error("Erro ao fazer login:", error)
       return false
     }
   }
 
-  // Logout function
-  const logout = () => {
-    setUser(null)
-    setIsAuthenticated(false)
-    localStorage.removeItem("user")
+  const logout = async () => {
+    try {
+      await signOut(auth)
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error)
+    }
   }
 
-  // Update profile
   const updateProfile = async (userData: any): Promise<boolean> => {
     try {
-      // Simulating API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      if (!user) return false
 
-      if (user) {
-        setUser({
-          ...user,
-          name: userData.name,
-          email: userData.email,
-          phone: userData.phone,
-          notifications: userData.notifications,
+      // Atualizar perfil no Firebase Auth
+      if (auth.currentUser) {
+        await updateFirebaseProfile(auth.currentUser, {
+          displayName: userData.name
         })
-        return true
-      }
-      return false
-    } catch (error) {
-      console.error("Error updating profile:", error)
-      return false
-    }
-  }
-
-  // Update password
-  const updatePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
-    try {
-      // Simulating API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Basic simulation of password check (in a real app, this would be done on the server)
-      if (user?.role === "admin" && currentPassword === "admin123") {
-        return true
-      } else if (user?.role === "customer" && currentPassword === "senha123") {
-        return true
       }
 
-      return false
-    } catch (error) {
-      console.error("Error updating password:", error)
-      return false
-    }
-  }
+      // Atualizar dados no Firestore
+      await updateDoc(doc(db, 'users', user.id), {
+        name: userData.name,
+        phone: userData.phone,
+        notifications: userData.notifications
+      })
 
-  // Address management
-  const addAddress = async (address: Omit<Address, "id">): Promise<boolean> => {
-    try {
-      const newAddress: Address = {
-        ...address,
-        id: `address_${Date.now()}`,
-      }
-
-      if (address.isDefault) {
-        // If the new address is default, remove default from other addresses
-        const updatedAddresses = addresses.map((addr) => ({
-          ...addr,
-          isDefault: false,
-        }))
-        setAddresses([...updatedAddresses, newAddress])
-      } else {
-        setAddresses([...addresses, newAddress])
-      }
+      setUser({
+        ...user,
+        name: userData.name,
+        phone: userData.phone,
+        notifications: userData.notifications
+      })
 
       return true
     } catch (error) {
-      console.error("Error adding address:", error)
+      console.error("Erro ao atualizar perfil:", error)
+      return false
+    }
+  }
+
+  const updatePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
+    try {
+      if (!auth.currentUser) return false
+
+      // Reautenticar o usuário antes de mudar a senha
+      const credential = EmailAuthProvider.credential(
+        auth.currentUser.email!,
+        currentPassword
+      )
+      await reauthenticateWithCredential(auth.currentUser, credential)
+
+      // Atualizar a senha
+      await updateFirebasePassword(auth.currentUser, newPassword)
+      return true
+    } catch (error) {
+      console.error("Erro ao atualizar senha:", error)
+      return false
+    }
+  }
+
+  const addAddress = async (address: Omit<Address, "id">): Promise<boolean> => {
+    try {
+      if (!user) return false
+
+      const newAddress = {
+        ...address,
+        id: `addr_${Date.now()}`
+      }
+
+      const updatedAddresses = [...addresses, newAddress]
+      await updateDoc(doc(db, 'users', user.id), {
+        addresses: updatedAddresses
+      })
+
+      setAddresses(updatedAddresses)
+      return true
+    } catch (error) {
+      console.error("Erro ao adicionar endereço:", error)
       return false
     }
   }
 
   const updateAddress = async (id: string, address: Omit<Address, "id">): Promise<boolean> => {
     try {
-      const updatedAddresses = addresses.map((addr) =>
-        addr.id === id ? { ...address, id } : address.isDefault ? { ...addr, isDefault: false } : addr,
+      if (!user) return false
+
+      const updatedAddresses = addresses.map(addr =>
+        addr.id === id ? { ...address, id } : addr
       )
+
+      await updateDoc(doc(db, 'users', user.id), {
+        addresses: updatedAddresses
+      })
+
       setAddresses(updatedAddresses)
       return true
     } catch (error) {
-      console.error("Error updating address:", error)
+      console.error("Erro ao atualizar endereço:", error)
       return false
     }
   }
 
   const removeAddress = async (id: string): Promise<boolean> => {
     try {
-      const updatedAddresses = addresses.filter((addr) => addr.id !== id)
+      if (!user) return false
+
+      const updatedAddresses = addresses.filter(addr => addr.id !== id)
+      await updateDoc(doc(db, 'users', user.id), {
+        addresses: updatedAddresses
+      })
+
       setAddresses(updatedAddresses)
       return true
     } catch (error) {
-      console.error("Error removing address:", error)
+      console.error("Erro ao remover endereço:", error)
       return false
     }
   }
 
-  // Payment method management
   const addPaymentMethod = async (paymentMethod: Omit<PaymentMethod, "id" | "last4">): Promise<boolean> => {
     try {
-      const last4 = paymentMethod.cardNumber.slice(-4)
+      if (!user) return false
 
-      const newPaymentMethod: PaymentMethod = {
+      const newPaymentMethod = {
         ...paymentMethod,
-        id: `payment_${Date.now()}`,
-        last4,
+        id: `pm_${Date.now()}`,
+        last4: paymentMethod.cardNumber.slice(-4)
       }
 
-      if (paymentMethod.isDefault) {
-        // If the new payment method is default, remove default from other payment methods
-        const updatedPaymentMethods = paymentMethods.map((payment) => ({
-          ...payment,
-          isDefault: false,
-        }))
-        setPaymentMethods([...updatedPaymentMethods, newPaymentMethod])
-      } else {
-        setPaymentMethods([...paymentMethods, newPaymentMethod])
-      }
+      const updatedPaymentMethods = [...paymentMethods, newPaymentMethod]
+      await updateDoc(doc(db, 'users', user.id), {
+        paymentMethods: updatedPaymentMethods
+      })
 
+      setPaymentMethods(updatedPaymentMethods)
       return true
     } catch (error) {
-      console.error("Error adding payment method:", error)
+      console.error("Erro ao adicionar método de pagamento:", error)
       return false
     }
   }
 
   const updatePaymentMethod = async (
     id: string,
-    paymentMethod: Omit<PaymentMethod, "id" | "last4">,
+    paymentMethod: Omit<PaymentMethod, "id" | "last4">
   ): Promise<boolean> => {
     try {
-      const last4 = paymentMethod.cardNumber.slice(-4)
+      if (!user) return false
 
-      const updatedPaymentMethods = paymentMethods.map((payment) =>
-        payment.id === id
-          ? { ...paymentMethod, id, last4 }
-          : paymentMethod.isDefault
-            ? { ...payment, isDefault: false }
-            : payment,
+      const updatedPaymentMethods = paymentMethods.map(pm =>
+        pm.id === id ? { ...paymentMethod, id, last4: paymentMethod.cardNumber.slice(-4) } : pm
       )
+
+      await updateDoc(doc(db, 'users', user.id), {
+        paymentMethods: updatedPaymentMethods
+      })
+
       setPaymentMethods(updatedPaymentMethods)
       return true
     } catch (error) {
-      console.error("Error updating payment method:", error)
+      console.error("Erro ao atualizar método de pagamento:", error)
       return false
     }
   }
 
   const removePaymentMethod = async (id: string): Promise<boolean> => {
     try {
-      const updatedPaymentMethods = paymentMethods.filter((payment) => payment.id !== id)
+      if (!user) return false
+
+      const updatedPaymentMethods = paymentMethods.filter(pm => pm.id !== id)
+      await updateDoc(doc(db, 'users', user.id), {
+        paymentMethods: updatedPaymentMethods
+      })
+
       setPaymentMethods(updatedPaymentMethods)
       return true
     } catch (error) {
-      console.error("Error removing payment method:", error)
+      console.error("Erro ao remover método de pagamento:", error)
       return false
     }
   }
@@ -417,7 +368,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
-    throw new Error("useAuth deve ser usado dentro de um AuthProvider")
+    throw new Error("useAuth must be used within an AuthProvider")
   }
   return context
 }

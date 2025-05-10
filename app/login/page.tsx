@@ -35,17 +35,18 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const redirectPath = searchParams.get("redirect")
 
-  // Redirect based on role or redirect parameter if authenticated
-  if (isAuthenticated) {
-    if (user?.role === "admin") {
-      router.push("/admin")
-    } else if (redirectPath) {
-      router.push(redirectPath)
-    } else {
-      router.push("/minha-conta")
+  // Redirecionar se já estiver autenticado
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (user?.role === "admin") {
+        router.push("/admin")
+      } else if (redirectPath) {
+        router.push(redirectPath)
+      } else {
+        router.push("/minha-conta")
+      }
     }
-    return null
-  }
+  }, [isAuthenticated, user, router, redirectPath])
 
   // Modificar o retorno do componente para incluir a verificação de carregamento
   // No início do return, antes de qualquer renderização:
@@ -73,14 +74,7 @@ export default function LoginPage() {
           variant: "default",
         })
 
-        // Redirect based on role or redirect parameter
-        if (user?.role === "admin") {
-          router.push("/admin")
-        } else if (redirectPath) {
-          router.push(redirectPath)
-        } else {
-          router.push("/minha-conta")
-        }
+        // O redirecionamento será feito pelo useEffect
       } else {
         toast({
           title: "Falha no login",
@@ -103,8 +97,8 @@ export default function LoginPage() {
     <div className="container mx-auto px-4 py-24 flex items-center justify-center min-h-screen">
       <div className="w-full max-w-md">
         <div className="text-center mb-8 pt-8">
-          <h1 className="text-3xl font-light mb-2">Área Administrativa</h1>
-          <p className="text-neutral-500">Faça login para acessar o painel</p>
+          <h1 className="text-3xl font-light mb-2">Entrar</h1>
+          <p className="text-neutral-500">Faça login para acessar sua conta</p>
         </div>
 
         <div className="border border-neutral-200 p-8">
@@ -117,7 +111,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@restaurante.com"
+                  placeholder="seu@email.com"
                   required
                   className="rounded-none mt-1"
                 />
@@ -134,13 +128,6 @@ export default function LoginPage() {
                   required
                   className="rounded-none mt-1"
                 />
-                <p className="text-xs text-neutral-500 mt-1">
-                  Para fins de demonstração, use:
-                  <br />
-                  Admin: admin@restaurante.com / admin123
-                  <br />
-                  Cliente: cliente@exemplo.com / senha123
-                </p>
               </div>
             </div>
 
