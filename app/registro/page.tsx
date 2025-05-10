@@ -15,12 +15,32 @@ import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/context/auth-context"
 import { Checkbox } from "@/components/ui/checkbox"
 
+// Função para formatar o telefone
+const formatPhoneNumber = (value: string) => {
+  const numbers = value.replace(/\D/g, '')
+  if (numbers.length <= 11) {
+    return numbers.replace(/(\d{2})(\d{0,5})(\d{0,4})/, (_, ddd, part1, part2) => {
+      if (part2) return `(${ddd}) ${part1}-${part2}`
+      if (part1) return `(${ddd}) ${part1}`
+      return `(${ddd}`
+    })
+  }
+  return value
+}
+
 // Define the validation schema
 const registerSchema = z
   .object({
     name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
     email: z.string().email("Email inválido"),
-    phone: z.string().min(10, "Telefone inválido"),
+    phone: z
+      .string()
+      .min(14, "Telefone inválido")
+      .max(15, "Telefone inválido")
+      .refine((value) => {
+        const numbers = value.replace(/\D/g, '')
+        return numbers.length >= 10 && numbers.length <= 11
+      }, "Telefone inválido"),
     password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
     confirmPassword: z.string(),
     notifications: z.boolean().optional(),
@@ -29,7 +49,6 @@ const registerSchema = z
     message: "As senhas não coincidem",
     path: ["confirmPassword"],
   })
-
 
 type RegisterFormValues = z.infer<typeof registerSchema>
 
@@ -60,11 +79,11 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
-      // Register the user with notifications preference
+      // Registrar o usuário com preferência de notificações
       const success = await register({
         name: values.name,
         email: values.email,
-        phone: values.phone,
+        phone: values.phone.replace(/\D/g, ''), // Remove caracteres não numéricos
         password: values.password,
         notifications: values.notifications || false,
       })
@@ -73,10 +92,10 @@ export default function RegisterPage() {
         toast({
           title: "Registro realizado com sucesso",
           description: "Sua conta foi criada. Você já está logado e será redirecionado.",
-          variant: "success",
+          variant: "default",
         })
 
-        // Redirect to account page or previous page
+        // Redirecionar para página de conta ou página anterior
         setTimeout(() => {
           const redirectPath = searchParams.get("redirect")
           if (redirectPath) {
@@ -165,6 +184,11 @@ export default function RegisterPage() {
                         className="rounded-none mt-1"
                         placeholder="(00) 00000-0000"
                         disabled={isLoading}
+                        onChange={(e) => {
+                          const formatted = formatPhoneNumber(e.target.value)
+                          field.onChange(formatted)
+                        }}
+                        maxLength={15}
                       />
                     </FormControl>
                     <FormMessage />
@@ -254,10 +278,10 @@ export default function RegisterPage() {
 
               <Button
                 type="submit"
-                className="w-full rounded-none bg-black text-white hover:bg-neutral-800"
+                className="w-full bg-[#2F5F53] text-white border-2 border-[#2F5F53] hover:bg-white hover:text-[#2F5F53] hover:border-[#2F5F53] transition-all duration-300 rounded-full shadow-lg hover:shadow-xl hover:scale-105"
                 disabled={isLoading}
               >
-                {isLoading ? "Registrando..." : "Criar Conta"}
+                {isLoading ? "Criando conta..." : "Criar Conta"}
               </Button>
             </form>
           </Form>
@@ -266,7 +290,10 @@ export default function RegisterPage() {
         <div className="text-center mt-6">
           <p className="text-sm text-neutral-500">
             Já possui uma conta?{" "}
-            <Link href="/login" className="text-black hover:underline">
+            <Link
+              href={searchParams.get("redirect") ? `/login?redirect=${searchParams.get("redirect")}` : "/login"}
+              className="text-black hover:underline"
+            >
               Faça login
             </Link>
           </p>
