@@ -30,6 +30,7 @@ const registerSchema = z
     path: ["confirmPassword"],
   })
 
+
 type RegisterFormValues = z.infer<typeof registerSchema>
 
 export default function RegisterPage() {
