@@ -67,7 +67,7 @@ interface Order {
 export default function OrdersPage() {
   const { toast } = useToast()
   const searchParams = useSearchParams()
-  const { addItem } = useCart()
+  const { addItem, cart } = useCart()
   const { user, isAuthenticated } = useAuth()
   const [orders, setOrders] = useState<Order[]>([])
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
@@ -183,20 +183,36 @@ export default function OrdersPage() {
 
   // Handle repeating an order
   const handleRepeatOrder = (order: Order) => {
+    let algumJaNoCarrinho = false;
     order.items.forEach((item: OrderItem) => {
-      addItem({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-      })
+      const existeNoCarrinho = cart.some(
+        (cartItem) => cartItem.id === item.id
+      )
+      if (existeNoCarrinho) {
+        algumJaNoCarrinho = true;
+      } else {
+        addItem({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+        })
+      }
     })
 
-    toast({
-      title: "Itens adicionados ao carrinho",
-      description: "Os itens do pedido foram adicionados ao seu carrinho.",
-      variant: "success"
-    })
+    if (algumJaNoCarrinho) {
+      toast({
+        title: "Itens já estão no carrinho",
+        description: "Alguns itens do pedido já estavam no seu carrinho e não foram adicionados novamente.",
+        variant: "default"
+      })
+    } else {
+      toast({
+        title: "Itens adicionados ao carrinho",
+        description: "Os itens do pedido foram adicionados ao seu carrinho.",
+        variant: "success"
+      })
+    }
   }
 
   // Download order receipt (would be a PDF in a real app)
