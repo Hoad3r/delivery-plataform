@@ -93,7 +93,7 @@ export default function CartPage() {
 
   if (cart.length === 0) {
     return (
-      <div className="container mx-auto px-3 sm:px-6 py-24 sm:py-32 text-center max-w-2xl">
+      <div className="container mx-auto px-3 sm:px-6 py-32 sm:py-40 text-center max-w-2xl">
         <div className="bg-white border border-neutral-200 rounded-sm overflow-hidden shadow-sm p-8">
           <div className="p-6 bg-gradient-to-r from-primary/20 to-secondary/20 border-b border-neutral-200 -mx-8 -mt-8 mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white mb-4">

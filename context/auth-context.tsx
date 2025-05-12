@@ -13,7 +13,7 @@ import {
   updatePassword as updateFirebasePassword
 } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
-import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
 type User = {
@@ -150,11 +150,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      await signInWithEmailAndPassword(auth, email, password)
-        return true
-    } catch (error) {
-      console.error("Erro ao fazer login:", error)
-      return false
+      console.log("=== INÍCIO DO PROCESSO DE LOGIN ===");
+      console.log("Email recebido:", email);
+      
+      console.log("Tentando fazer login com Firebase Auth...");
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log("Login bem sucedido:", userCredential.user.uid);
+      
+      return true;
+    } catch (error: any) {
+      console.log("=== ERRO NO LOGIN ===");
+      console.log("Erro completo:", error);
+      console.log("Código do erro:", error?.code);
+      console.log("Mensagem do erro:", error?.message);
+      
+      if (error?.code === "auth/invalid-credential") {
+        console.log("Verificando se o email existe no Firestore...");
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("email", "==", email));
+        const querySnapshot = await getDocs(q);
+        
+        console.log("Verificação no Firestore:", querySnapshot.empty ? "Email não encontrado" : "Email encontrado");
+        
+        if (querySnapshot.empty) {
+          console.log("Email não encontrado no Firestore - redirecionando para registro");
+          return false;
+        } else {
+          console.log("Email encontrado no Firestore - senha incorreta");
+          return false;
+        }
+      } else if (error?.code === "auth/user-not-found") {
+        console.log("Usuário não encontrado");
+      } else if (error?.code === "auth/too-many-requests") {
+        console.log("Muitas tentativas de login");
+      }
+      
+      return false;
     }
   }
 

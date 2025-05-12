@@ -39,7 +39,7 @@ export default function Navbar() {
   // Debug values
   console.log("Navbar Debug - isHomePage:", isHomePage, "isScrolled:", isScrolled, "pathname:", pathname)
 
-  if (pathname?.startsWith("/admin")) {
+  if (pathname?.startsWith("/admin") || pathname?.startsWith("/minha-conta")) {
     return null
   }
 

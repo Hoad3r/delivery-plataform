@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { fetchSignInMethodsForEmail, sendPasswordResetEmail } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
 
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -21,6 +23,7 @@ type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 
 export default function ForgotPasswordPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -33,47 +36,72 @@ export default function ForgotPasswordPage() {
 
   async function onSubmit(values: ForgotPasswordFormValues) {
     setIsLoading(true);
+    console.log("=== INÍCIO DO PROCESSO DE RECUPERAÇÃO ===");
+    console.log("Email recebido:", values.email);
   
     try {
-      console.log("Tentando enviar email de recuperação para:", values.email);
+      console.log("1. Verificando se o email existe no banco de dados...");
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("email", "==", values.email));
+      const querySnapshot = await getDocs(q);
       
-      // Tenta enviar o email de recuperação diretamente
+      console.log("2. Resultado da busca:", querySnapshot.empty ? "Email não encontrado" : "Email encontrado");
+
+      if (querySnapshot.empty) {
+        console.log("3. Email não encontrado - redirecionando para registro");
+        toast({
+          title: "Conta não encontrada",
+          description: "Ops! Parece que você ainda não tem uma conta conosco. Que tal se cadastrar?",
+          variant: "destructive",
+        });
+        router.push("/registro");
+        return;
+      }
+
+      console.log("4. Email encontrado, enviando email de recuperação...");
       await sendPasswordResetEmail(auth, values.email);
-      console.log("Email de recuperação enviado com sucesso");
+      console.log("5. Email de recuperação enviado com sucesso");
   
       toast({
         title: "Sucesso",
-        description: "As instruções para redefinir sua senha foram enviadas para seu email.",
+        description: "Enviamos as instruções para redefinir sua senha.",
         variant: "default",
       });
   
       setSubmitted(true);
-    } catch (error: unknown) {
-      console.error("Erro ao enviar email de recuperação:", error);
+    } catch (error: any) {
+      console.log("=== ERRO DETECTADO ===");
+      console.log("Erro completo:", error);
+      console.log("Tipo do erro:", typeof error);
+      console.log("Código do erro:", error?.code);
+      console.log("Mensagem do erro:", error?.message);
   
-      let errorMessage = "Ocorreu um erro ao tentar enviar o email de recuperação.";
-  
-      if (error instanceof Error) {
-        console.log("Tipo de erro:", error.message);
-        
-        if (error.message === "auth/invalid-email") {
-          errorMessage = "O email fornecido é inválido.";
-        } else if (error.message === "auth/too-many-requests") {
-          errorMessage = "Muitas tentativas. Por favor, tente novamente mais tarde.";
-        } else if (error.message === "auth/user-not-found") {
-          errorMessage = "Não encontramos uma conta cadastrada com este email.";
-        }
+      if (error?.code === "auth/invalid-email") {
+        toast({
+          title: "Erro",
+          description: "O email fornecido é inválido.",
+          variant: "destructive",
+        });
+      } else if (error?.code === "auth/too-many-requests") {
+        toast({
+          title: "Erro",
+          description: "Muitas tentativas. Tente mais tarde.",
+          variant: "destructive",
+        });
+      } else {
+        console.log("Erro desconhecido:", error);
+        toast({
+          title: "Erro",
+          description: "Ocorreu um erro ao tentar enviar o email de recuperação.",
+          variant: "destructive",
+        });
       }
-  
-      toast({
-        title: "Erro",
-        description: errorMessage,
-        variant: "destructive",
-      });
     } finally {
       setIsLoading(false);
+      console.log("=== FIM DO PROCESSO DE RECUPERAÇÃO ===");
     }
   }
+  
   
 
   return (
