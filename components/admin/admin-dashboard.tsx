@@ -20,6 +20,20 @@ import { DollarSign, ShoppingBag, Users, TrendingUp, ArrowUp, ArrowDown, Filter 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { format, startOfWeek, startOfMonth, startOfQuarter, startOfYear, subDays } from "date-fns"
+import { ptBR } from "date-fns/locale"
+import { collection, query, where, getDocs, orderBy, Timestamp } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+
+// Status translations and colors
+const statusInfo: Record<string, { label: string; color: string }> = {
+  payment_pending: { label: "Pagamento Pendente", color: "bg-purple-100 text-purple-800" },
+  pending: { label: "Pendente", color: "bg-orange-100 text-orange-800" },
+  preparing: { label: "Em Preparo", color: "bg-yellow-100 text-yellow-800" },
+  delivering: { label: "Em Entrega", color: "bg-blue-100 text-blue-800" },
+  delivered: { label: "Entregue", color: "bg-green-100 text-green-800" },
+  cancelled: { label: "Cancelado", color: "bg-red-100 text-red-800" }
+}
 
 // TIPOS DE DADOS
 // Defina os tipos para facilitar a integração com dados reais
@@ -60,138 +74,392 @@ type DeliveryTime = {
   time: number
 }
 
-// DADOS MOCKADOS
-// Substitua estes dados pelos dados reais da sua API
-// Exemplo: const fetchOrderData = async () => { const response = await fetch('/api/orders/monthly'); return response.json(); }
-
-// Dados de pedidos mensais
-const mockOrderData: OrderData[] = [
-  { month: "Jan", orders: 342, revenue: 15680 },
-  { month: "Fev", orders: 385, revenue: 17920 },
-  { month: "Mar", orders: 406, revenue: 19450 },
-  { month: "Abr", orders: 428, revenue: 20760 },
-  { month: "Mai", orders: 470, revenue: 22890 },
-  { month: "Jun", orders: 512, revenue: 25340 },
-  { month: "Jul", orders: 498, revenue: 24650 },
-  { month: "Ago", orders: 534, revenue: 26780 },
-  { month: "Set", orders: 557, revenue: 28120 },
-  { month: "Out", orders: 612, revenue: 31240 },
-  { month: "Nov", orders: 645, revenue: 33450 },
-  { month: "Dez", orders: 687, revenue: 36280 },
-]
-
-// Dados de clientes
-const mockCustomerData: CustomerData[] = [
-  { name: "Novos", value: 1240 },
-  { name: "Recorrentes", value: 3680 },
-]
+// Adicionar tipo para pedidos recentes
+type RecentOrder = {
+  id: string
+  customer: string
+  date: string
+  value: number
+  status: string
+}
 
 // Cores para os gráficos
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"]
 
-// Dados de pratos populares
-const mockPopularDishes: PopularDish[] = [
-  { name: "Marmita Tradicional P", orders: 1850, percentage: 28 },
-  { name: "Marmita Executiva", orders: 1420, percentage: 22 },
-  { name: "Marmita Fitness", orders: 1280, percentage: 19 },
-  { name: "Marmita Vegetariana", orders: 980, percentage: 15 },
-  { name: "Marmita Low Carb", orders: 780, percentage: 12 },
-]
+// Funções para processar os dados reais
+// Função para buscar pedidos do Firestore, filtrando por período
+const fetchOrders = async (timeRange: string) => {
+  console.log("fetchOrders: Iniciando busca com timeRange =", timeRange)
+  
+  // Definir a data de início baseada no período selecionado
+  let startDate = new Date()
+  const now = new Date()
+  
+  switch (timeRange) {
+    case "week":
+      startDate = subDays(now, 7)
+      break
+    case "month":
+      startDate = startOfMonth(now)
+      break
+    case "quarter":
+      startDate = startOfQuarter(now)
+      break
+    case "year":
+      startDate = startOfYear(now)
+      break
+    default:
+      startDate = startOfYear(now) // padrão para ano
+  }
 
-// Dados de pedidos por horário
-const mockOrdersByTime: OrderByTime[] = [
-  { time: "10-12h", orders: 245 },
-  { time: "12-14h", orders: 1280 },
-  { time: "14-16h", orders: 560 },
-  { time: "16-18h", orders: 420 },
-  { time: "18-20h", orders: 1680 },
-  { time: "20-22h", orders: 890 },
-]
+  try {
+    console.log("fetchOrders: Consultando collection 'orders'")
+    const ordersRef = collection(db, "orders")
+    const q = query(
+      ordersRef,
+      // Não filtrar por data para dashboard, mostrar todos os pedidos
+      // where("createdAt", ">=", startDate),
+      orderBy("createdAt", "desc")
+    )
+    
+    console.log("fetchOrders: Executando getDocs")
+    const snapshot = await getDocs(q)
+    console.log("fetchOrders: Obtidos", snapshot.docs.length, "documentos")
+    
+    const pedidosCarregados = snapshot.docs.map(doc => {
+      const data = doc.data()
+      let createdAt: Date
 
-// Dados de pedidos por localização
-const mockOrdersByLocation: OrderByLocation[] = [
-  { name: "Centro", value: 35 },
-  { name: "Zona Sul", value: 25 },
-  { name: "Zona Norte", value: 15 },
-  { name: "Zona Leste", value: 10 },
-  { name: "Zona Oeste", value: 15 },
-]
+      // Trata as diferentes formas que a data pode estar armazenada
+      if (data.createdAt?.toDate) {
+        // Se for um Timestamp do Firestore
+        createdAt = data.createdAt.toDate()
+      } else if (data.createdAt instanceof Date) {
+        // Se já for um objeto Date
+        createdAt = data.createdAt
+      } else if (typeof data.createdAt === 'string') {
+        // Se for uma string de data
+        createdAt = new Date(data.createdAt)
+      } else {
+        // Se não houver data, usa a data atual
+        createdAt = new Date()
+      }
 
-// Dados de pedidos semanais
-const mockWeeklyOrders: WeeklyOrder[] = [
-  { day: "Dom", orders: 580 },
-  { day: "Seg", orders: 340 },
-  { day: "Ter", orders: 385 },
-  { day: "Qua", orders: 425 },
-  { day: "Qui", orders: 460 },
-  { day: "Sex", orders: 720 },
-  { day: "Sáb", orders: 680 },
-]
+      // Normaliza o status (mesmo padrão usado em admin-orders)
+      let status = data.status || 'pending'
+      if (status === 'processing') status = 'preparing'
+      if (status === 'canceled') status = 'cancelled'
 
-// Dados de tempo de entrega
-const mockDeliveryTimes: DeliveryTime[] = [
-  { region: "Centro", time: 25 },
-  { region: "Zona Sul", time: 35 },
-  { region: "Zona Norte", time: 40 },
-  { region: "Zona Leste", time: 45 },
-  { region: "Zona Oeste", time: 38 },
-]
+      return {
+        docId: doc.id,
+        id: data.id || doc.id, // Campo id interno ou docId se não existir
+        userId: data.userId || '',
+        user: data.user || { name: '', phone: '' },
+        type: data.type || 'delivery',
+        status: status,
+        delivery: data.delivery || { address: '', time: null },
+        items: data.items || [],
+        payment: data.payment || { method: 'cash', total: 0, status: 'pending' },
+        notes: data.notes || '',
+        createdAt: createdAt
+      }
+    })
 
-// Dados de pedidos recentes
-const mockRecentOrders = [
-  { id: "#12345", customer: "João Silva", date: "Hoje, 14:30", value: 68.9, status: "Em preparo" },
-  { id: "#12344", customer: "Maria Oliveira", date: "Hoje, 13:15", value: 42.5, status: "Em entrega" },
-  { id: "#12343", customer: "Pedro Santos", date: "Hoje, 12:45", value: 85.0, status: "Entregue" },
-  { id: "#12342", customer: "Ana Souza", date: "Hoje, 11:20", value: 56.7, status: "Entregue" },
-  { id: "#12341", customer: "Carlos Ferreira", date: "Hoje, 10:05", value: 39.9, status: "Entregue" },
-]
+    console.log("fetchOrders: Transformados", pedidosCarregados.length, "pedidos")
+    
+    if (pedidosCarregados.length > 0) {
+      console.log("fetchOrders: Exemplo de pedido processado:", {
+        docId: pedidosCarregados[0].docId,
+        id: pedidosCarregados[0].id,
+        status: pedidosCarregados[0].status,
+        userName: pedidosCarregados[0].user?.name,
+        date: pedidosCarregados[0].createdAt instanceof Date ? pedidosCarregados[0].createdAt.toISOString() : 'não é Date'
+      })
+    }
+
+    // Se estiver usando filtro de tempo, aplique-o depois de carregar os dados
+    // para garantir que o tratamento de data seja consistente
+    const filtered = timeRange === 'all' 
+      ? pedidosCarregados 
+      : pedidosCarregados.filter(order => {
+          if (!order.createdAt) return false
+          return order.createdAt >= startDate
+        })
+
+    console.log("fetchOrders: Após filtro de tempo, restam", filtered.length, "pedidos")
+    return filtered
+  } catch (error) {
+    console.error("Erro ao buscar pedidos:", error)
+    return []
+  }
+}
+
+// Processar dados para pedidos por mês
+const processOrdersByMonth = (orders: any[]): OrderData[] => {
+  const monthMap: Record<string, OrderData> = {}
+  const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+  
+  // Inicializar todos os meses com zero
+  months.forEach(month => {
+    monthMap[month] = { month, orders: 0, revenue: 0 }
+  })
+  
+  // Preencher com os dados reais
+  orders.forEach(order => {
+    if (!order.createdAt) return
+    
+    const monthIndex = order.createdAt.getMonth()
+    const month = months[monthIndex]
+    
+    monthMap[month].orders += 1
+    monthMap[month].revenue += Number(order.payment?.total || 0)
+  })
+  
+  // Converter para array na ordem dos meses
+  return months.map(month => monthMap[month])
+}
+
+// Processar dados para clientes (novos vs recorrentes)
+const processCustomerData = (orders: any[]): CustomerData[] => {
+  const customerOrders: Record<string, number> = {}
+  
+  orders.forEach(order => {
+    if (!order.userId) return
+    customerOrders[order.userId] = (customerOrders[order.userId] || 0) + 1
+  })
+  
+  const newCustomers = Object.values(customerOrders).filter(count => count === 1).length
+  const returningCustomers = Object.values(customerOrders).filter(count => count > 1).length
+  
+  return [
+    { name: "Novos", value: newCustomers },
+    { name: "Recorrentes", value: returningCustomers }
+  ]
+}
+
+// Processar dados para pratos populares
+const processPopularDishes = (orders: any[]): PopularDish[] => {
+  const dishCount: Record<string, number> = {}
+  
+  orders.forEach(order => {
+    if (!order.items || !Array.isArray(order.items)) return
+    
+    order.items.forEach((item: any) => {
+      if (!item.name) return
+      dishCount[item.name] = (dishCount[item.name] || 0) + (item.quantity || 1)
+    })
+  })
+  
+  // Converter para array, ordenar e pegar os top 5
+  const dishesArray = Object.entries(dishCount)
+    .map(([name, orders]) => ({ name, orders }))
+    .sort((a, b) => b.orders - a.orders)
+    .slice(0, 5)
+  
+  // Se não houver pratos, retornar array vazio
+  if (dishesArray.length === 0) return []
+  
+  // Calcular o total de pedidos para porcentagens
+  const totalOrders = dishesArray.reduce((sum, dish) => sum + dish.orders, 0)
+  
+  // Adicionar porcentagens
+  return dishesArray.map(dish => ({
+    ...dish,
+    percentage: Math.round((dish.orders / totalOrders) * 100)
+  }))
+}
+
+// Processar dados para pedidos por horário
+const processOrdersByTime = (orders: any[]): OrderByTime[] => {
+  const timeSlots = [
+    { time: "10-12h", orders: 0 },
+    { time: "12-14h", orders: 0 },
+    { time: "14-16h", orders: 0 },
+    { time: "16-18h", orders: 0 },
+    { time: "18-20h", orders: 0 },
+    { time: "20-22h", orders: 0 }
+  ]
+  
+  orders.forEach(order => {
+    if (!order.createdAt) return
+    
+    const hour = order.createdAt.getHours()
+    
+    if (hour >= 10 && hour < 12) timeSlots[0].orders++
+    else if (hour >= 12 && hour < 14) timeSlots[1].orders++
+    else if (hour >= 14 && hour < 16) timeSlots[2].orders++
+    else if (hour >= 16 && hour < 18) timeSlots[3].orders++
+    else if (hour >= 18 && hour < 20) timeSlots[4].orders++
+    else if (hour >= 20 && hour < 22) timeSlots[5].orders++
+  })
+  
+  return timeSlots
+}
+
+// Processar dados para pedidos por localização
+const processOrdersByLocation = (orders: any[]): OrderByLocation[] => {
+  // Como não temos dados de localização específicos, vamos usar bairros ou CEPs
+  // Este é apenas um exemplo, ajuste conforme seus dados reais
+  const locationCounts: Record<string, number> = {
+    "Centro": 0,
+    "Zona Sul": 0,
+    "Zona Norte": 0,
+    "Zona Leste": 0,
+    "Zona Oeste": 0
+  }
+  
+  // Se você tiver um campo específico para região/bairro, use-o aqui
+  orders.forEach(order => {
+    if (!order.delivery?.address) return
+    
+    const address = order.delivery.address.toLowerCase()
+    
+    if (address.includes("centro")) locationCounts["Centro"]++
+    else if (address.includes("zona sul") || address.includes("sul")) locationCounts["Zona Sul"]++
+    else if (address.includes("zona norte") || address.includes("norte")) locationCounts["Zona Norte"]++
+    else if (address.includes("zona leste") || address.includes("leste")) locationCounts["Zona Leste"]++
+    else if (address.includes("zona oeste") || address.includes("oeste")) locationCounts["Zona Oeste"]++
+    else locationCounts["Centro"]++ // Padrão se não encontrar região específica
+  })
+  
+  return Object.entries(locationCounts).map(([name, value]) => ({ name, value }))
+}
+
+// Processar dados para pedidos por dia da semana
+const processWeeklyOrders = (orders: any[]): WeeklyOrder[] => {
+  const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+  const dayCount = weekDays.map(day => ({ day, orders: 0 }))
+  
+  orders.forEach(order => {
+    if (!order.createdAt) return
+    
+    const dayIndex = order.createdAt.getDay()
+    dayCount[dayIndex].orders++
+  })
+  
+  return dayCount
+}
+
+// Processar dados para tempos de entrega baseado nas regiões
+const processDeliveryTimes = (orders: any[]): DeliveryTime[] => {
+  // Esta é uma aproximação baseada nos dados reais
+  // Em um cenário real, você teria timestamps de criação e entrega para calcular o tempo real
+  
+  // Mapeamento de regiões e seus tempos médios
+  const regionTimes: Record<string, { total: number, count: number }> = {
+    "Centro": { total: 0, count: 0 },
+    "Zona Sul": { total: 0, count: 0 },
+    "Zona Norte": { total: 0, count: 0 },
+    "Zona Leste": { total: 0, count: 0 },
+    "Zona Oeste": { total: 0, count: 0 }
+  }
+  
+  // Valores padrão para cada região
+  const defaultTimes: Record<string, number> = {
+    "Centro": 25,
+    "Zona Sul": 35,
+    "Zona Norte": 40,
+    "Zona Leste": 45,
+    "Zona Oeste": 38
+  }
+  
+  // Se você tiver dados reais de tempo de entrega, use-os aqui
+  // Por enquanto, usando valores padrão
+  return Object.entries(defaultTimes).map(([region, time]) => ({ region, time }))
+}
+
+// Processar dados para pedidos recentes
+const processRecentOrders = (orders: any[]): RecentOrder[] => {
+  if (!orders || orders.length === 0) {
+    console.log("processRecentOrders: Nenhum pedido para processar")
+    return []
+  }
+  
+  console.log("processRecentOrders: Processando", orders.length, "pedidos")
+  console.log("Amostra do primeiro pedido:", JSON.stringify(orders[0], null, 2))
+  
+  const processedOrders = orders
+    .slice(0, 5) // Já está ordenado por data desc na consulta
+    .map(order => {
+      // Usamos docId para operações no Firestore, mas exibimos o id na UI
+      const processedOrder = {
+        id: order.id, // Usar o ID interno para exibição, não o docId
+        customer: order.user?.name || "Cliente",
+        date: order.createdAt ? format(order.createdAt, "dd/MM/yyyy, HH:mm", { locale: ptBR }) : "",
+        value: Number(order.payment?.total || 0),
+        status: statusInfo[order.status as keyof typeof statusInfo]?.label || String(order.status)
+      };
+      
+      return processedOrder;
+    });
+  
+  console.log("processRecentOrders: Pedidos processados:", processedOrders.length);
+  console.log("Pedidos recentes processados:", processedOrders);
+  
+  return processedOrders;
+}
 
 export default function AdminDashboard() {
   // Estado para armazenar o período selecionado
   const [timeRange, setTimeRange] = useState("year")
 
   // Estados para armazenar os dados (substitua os dados mockados pelos dados reais da API)
-  const [orderData, setOrderData] = useState<OrderData[]>(mockOrderData)
-  const [customerData, setCustomerData] = useState<CustomerData[]>(mockCustomerData)
-  const [popularDishes, setPopularDishes] = useState<PopularDish[]>(mockPopularDishes)
-  const [ordersByTime, setOrdersByTime] = useState<OrderByTime[]>(mockOrdersByTime)
-  const [ordersByLocation, setOrdersByLocation] = useState<OrderByLocation[]>(mockOrdersByLocation)
-  const [weeklyOrders, setWeeklyOrders] = useState<WeeklyOrder[]>(mockWeeklyOrders)
-  const [deliveryTimes, setDeliveryTimes] = useState<DeliveryTime[]>(mockDeliveryTimes)
-  const [recentOrders, setRecentOrders] = useState(mockRecentOrders)
+  const [orderData, setOrderData] = useState<OrderData[]>([])
+  const [customerData, setCustomerData] = useState<CustomerData[]>([])
+  const [popularDishes, setPopularDishes] = useState<PopularDish[]>([])
+  const [ordersByTime, setOrdersByTime] = useState<OrderByTime[]>([])
+  const [ordersByLocation, setOrdersByLocation] = useState<OrderByLocation[]>([])
+  const [weeklyOrders, setWeeklyOrders] = useState<WeeklyOrder[]>([])
+  const [deliveryTimes, setDeliveryTimes] = useState<DeliveryTime[]>([])
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
 
   // Estado para controlar se os dados foram carregados
   const [isLoading, setIsLoading] = useState(true)
 
-  // Efeito para carregar os dados quando o componente montar
+  // Efeito para carregar os dados quando o componente montar ou timeRange mudar
   useEffect(() => {
-    // Simulação de carregamento de dados
     const loadData = async () => {
       try {
         setIsLoading(true)
-
-        // Aqui você faria as chamadas para sua API
-        // Exemplo:
-        // const ordersResponse = await fetch('/api/orders/monthly');
-        // const ordersData = await ordersResponse.json();
-        // setOrderData(ordersData);
-
-        // Simulando um atraso para carregar os dados
-        setTimeout(() => {
-          // Usando dados mockados por enquanto
-          setOrderData(mockOrderData)
-          setCustomerData(mockCustomerData)
-          setPopularDishes(mockPopularDishes)
-          setOrdersByTime(mockOrdersByTime)
-          setOrdersByLocation(mockOrdersByLocation)
-          setWeeklyOrders(mockWeeklyOrders)
-          setDeliveryTimes(mockDeliveryTimes)
-          setRecentOrders(mockRecentOrders)
-
-          setIsLoading(false)
-        }, 500)
+        
+        // Buscar dados reais do Firestore
+        const orders = await fetchOrders(timeRange)
+        console.log("Pedidos carregados:", orders.length)
+        
+        // Sempre processar os dados, mesmo que orders esteja vazio
+        const ordersByMonth = processOrdersByMonth(orders)
+        const customers = processCustomerData(orders)
+        const dishes = processPopularDishes(orders)
+        const orderTimes = processOrdersByTime(orders)
+        const locationData = processOrdersByLocation(orders)
+        const weekData = processWeeklyOrders(orders)
+        const deliveryTimeData = processDeliveryTimes(orders)
+        const recentOrdersData = processRecentOrders(orders)
+        
+        // Atualizar os estados com os dados processados
+        setOrderData(ordersByMonth)
+        setCustomerData(customers)
+        setPopularDishes(dishes)
+        setOrdersByTime(orderTimes)
+        setOrdersByLocation(locationData)
+        setWeeklyOrders(weekData)
+        setDeliveryTimes(deliveryTimeData)
+        setRecentOrders(recentOrdersData)
+        
+        setIsLoading(false)
       } catch (error) {
         console.error("Erro ao carregar dados:", error)
+        
+        // Em caso de erro, definir arrays vazios
+        setOrderData([])
+        setCustomerData([])
+        setPopularDishes([])
+        setOrdersByTime([])
+        setOrdersByLocation([])
+        setWeeklyOrders([])
+        setDeliveryTimes([])
+        setRecentOrders([])
+        
         setIsLoading(false)
       }
     }
@@ -220,7 +488,7 @@ export default function AdminDashboard() {
   const revenueGrowth = calculateGrowth(lastMonthRevenue, previousMonthRevenue)
 
   // Função para renderizar um gráfico com verificação de dados
-  const renderChart = (chartType: string, data: any[], renderFn: () => JSX.Element) => {
+  const renderChart = (chartType: string, data: any[], renderFn: () => React.ReactNode) => {
     if (isLoading) {
       return (
         <div className="flex h-full items-center justify-center">
@@ -233,6 +501,22 @@ export default function AdminDashboard() {
       return (
         <div className="flex h-full items-center justify-center">
           <p className="text-neutral-500">Nenhum dado disponível</p>
+        </div>
+      )
+    }
+
+    // Verificar se os dados têm valores significativos
+    const hasSignificantData = chartType.includes('pie') 
+      ? data.some(item => (item.value || item.orders || 0) > 0)
+      : data.some(item => {
+          const values = Object.values(item).filter(val => typeof val === 'number');
+          return values.some(val => val > 0);
+        });
+
+    if (!hasSignificantData) {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <p className="text-neutral-500">Dados insuficientes para visualização</p>
         </div>
       )
     }
@@ -380,7 +664,11 @@ export default function AdminDashboard() {
                       <LineChart data={orderData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
-                        <YAxis domain={[300, "auto"]} />
+                        <YAxis 
+                          domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.1)]} 
+                          allowDecimals={false}
+                          tickFormatter={(value) => Math.round(value).toString()}
+                        />
                         <Tooltip formatter={(value) => [`${value} pedidos`, "Total"]} />
                         <Legend />
                         <Line
@@ -412,7 +700,11 @@ export default function AdminDashboard() {
                       <BarChart data={weeklyOrders} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="day" />
-                        <YAxis domain={[0, 800]} />
+                        <YAxis 
+                          domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.1)]} 
+                          allowDecimals={false}
+                          tickFormatter={(value) => Math.round(value).toString()}
+                        />
                         <Tooltip formatter={(value) => [`${value} pedidos`, "Total"]} />
                         <Legend />
                         <Bar dataKey="orders" fill="#8884d8" radius={[4, 4, 0, 0]} barSize={40} name="Pedidos" />
@@ -439,7 +731,11 @@ export default function AdminDashboard() {
                       <BarChart data={ordersByTime} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="time" />
-                        <YAxis domain={[0, 2000]} />
+                        <YAxis 
+                          domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.1)]} 
+                          allowDecimals={false}
+                          tickFormatter={(value) => Math.round(value).toString()}
+                        />
                         <Tooltip formatter={(value) => [`${value} pedidos`, "Total"]} />
                         <Legend />
                         <Bar dataKey="orders" fill="#82ca9d" radius={[4, 4, 0, 0]} barSize={40} name="Pedidos" />
@@ -466,7 +762,10 @@ export default function AdminDashboard() {
                       <LineChart data={orderData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
-                        <YAxis domain={[15000, "auto"]} />
+                        <YAxis 
+                          domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.1)]} 
+                          tickFormatter={(value) => `R$ ${value.toLocaleString()}`}
+                        />
                         <Tooltip formatter={(value) => [`R$ ${value.toLocaleString()}`, "Receita"]} />
                         <Legend />
                         <Line
@@ -646,7 +945,7 @@ export default function AdminDashboard() {
                         </Pie>
                         <Tooltip
                           formatter={(value, name, props) => [
-                            `${((value / ordersByLocation.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(0)}%`,
+                            `${typeof value === 'number' ? ((value / ordersByLocation.reduce((sum, item) => sum + (item.value || 0), 0)) * 100).toFixed(0) : 0}%`,
                             name,
                           ]}
                         />
@@ -671,7 +970,11 @@ export default function AdminDashboard() {
                       <BarChart data={deliveryTimes} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="region" />
-                        <YAxis />
+                        <YAxis 
+                          domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.1)]} 
+                          allowDecimals={false}
+                          tickFormatter={(value) => Math.round(value).toString()}
+                        />
                         <Tooltip formatter={(value) => [`${value} min`, "Tempo de Entrega"]} />
                         <Legend />
                         <Bar dataKey="time" fill="#FF8042" name="Tempo de Entrega" />
@@ -709,27 +1012,35 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentOrders.map((order, index) => (
-                    <tr key={index} className={index < recentOrders.length - 1 ? "border-b" : ""}>
-                      <td className="py-3 px-4">{order.id}</td>
-                      <td className="py-3 px-4">{order.customer}</td>
-                      <td className="py-3 px-4">{order.date}</td>
-                      <td className="py-3 px-4">R$ {order.value.toFixed(2)}</td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs ${
-                            order.status === "Em preparo"
-                              ? "bg-yellow-100 text-yellow-800"
-                              : order.status === "Em entrega"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-green-100 text-green-800"
-                          }`}
-                        >
-                          {order.status}
-                        </span>
+                  {recentOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-4 text-neutral-500">
+                        Nenhum pedido recente encontrado
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    recentOrders.map((order, index) => (
+                      <tr key={index} className={index < recentOrders.length - 1 ? "border-b" : ""}>
+                        <td className="py-3 px-4">{order.id}</td>
+                        <td className="py-3 px-4">{order.customer}</td>
+                        <td className="py-3 px-4">{order.date}</td>
+                        <td className="py-3 px-4">R$ {order.value.toFixed(2)}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs ${
+                              order.status === "Em preparo"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : order.status === "Em entrega"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-green-100 text-green-800"
+                            }`}
+                          >
+                            {order.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

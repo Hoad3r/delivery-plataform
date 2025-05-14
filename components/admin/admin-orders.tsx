@@ -33,122 +33,18 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
-import { collection, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore"
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, orderBy, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/hooks/use-auth"
 
-// Mock data for orders
-const mockOrders: Order[] = [
-  {
-    "id": "ORD-001",
-    "userId": "placeholder-user-id-1",
-    "user": {
-      "name": "João Silva",
-      "phone": "(11) 99999-9999"
-    },
-    "createdAt": "2023-11-28T18:30:00",
-    "type": "delivery",
-    "status": "preparing",
-    "delivery": {
-      "address": "Rua das Flores, 123, Apto 45, Jardim Primavera, São Paulo, SP",
-      "time": null
-    },
-    "items": [
-      { "id": "1", "name": "Marmita Tradicional P", "price": 16.9, "quantity": 2 },
-      { "id": "3", "name": "Marmita Fitness", "price": 20.9, "quantity": 1 }
-    ],
-    "payment": {
-      "method": "pix",
-      "total": 54.7,
-      "status": "pending"
-    },
-    "notes": "Sem cebola na marmita fitness, por favor."
-  },
-  {
-    "id": "ORD-002",
-    "userId": "placeholder-user-id-2",
-    "user": {
-      "name": "Maria Santos",
-      "phone": "(11) 98888-8888"
-    },
-    "createdAt": "2023-11-28T18:15:00",
-    "type": "delivery",
-    "status": "delivering",
-    "delivery": {
-      "address": "Av. Paulista, 1000, Bela Vista, São Paulo, SP",
-      "time": null
-    },
-    "items": [
-      { "id": "2", "name": "Marmita Tradicional M", "price": 18.9, "quantity": 1 },
-      { "id": "5", "name": "Marmita Vegetariana", "price": 20.9, "quantity": 1 }
-    ],
-    "payment": {
-      "method": "credit",
-      "card": "•••• 1234",
-      "total": 39.8,
-      "status": "paid"
-    },
-    "notes": ""
-  },
-  {
-    "id": "ORD-003",
-    "userId": "placeholder-user-id-3",
-    "user": {
-      "name": "Pedro Oliveira",
-      "phone": "(11) 97777-7777"
-    },
-    "createdAt": "2023-11-28T17:45:00",
-    "type": "delivery",
-    "status": "delivered",
-    "delivery": {
-      "address": "Rua Augusta, 500, Consolação, São Paulo, SP",
-      "time": "2023-11-28T18:30:00"
-    },
-    "items": [
-      { "id": "4", "name": "Marmita Low Carb", "price": 22.9, "quantity": 1 },
-      { "id": "6", "name": "Marmita Executiva", "price": 24.9, "quantity": 1 }
-    ],
-    "payment": {
-      "method": "pix",
-      "total": 47.8,
-      "status": "paid"
-    },
-    "notes": "Entregar na portaria."
-  },
-  {
-    "id": "ORD-004",
-    "userId": "placeholder-user-id-4",
-    "user": {
-      "name": "Ana Costa",
-      "phone": "(11) 96666-6666"
-    },
-    "createdAt": "2023-11-28T17:30:00",
-    "type": "pickup",
-    "status": "delivered",
-    "delivery": {
-      "address": "",
-      "time": null
-    },
-    "items": [
-      { "id": "1", "name": "Marmita Tradicional P", "price": 16.9, "quantity": 1 }
-    ],
-    "payment": {
-      "method": "cash",
-      "total": 16.9,
-      "status": "pending"
-    },
-    "notes": ""
-  }
-];
-
 // Status translations and colors
 const statusInfo = {
+  payment_pending: { label: "Pagamento Pendente", color: "bg-purple-100 text-purple-800", icon: <AlertCircle className="h-4 w-4" /> },
+  pending: { label: "Pendente", color: "bg-orange-100 text-orange-800", icon: <AlertCircle className="h-4 w-4" /> },
   preparing: { label: "Em Preparo", color: "bg-yellow-100 text-yellow-800", icon: <Clock className="h-4 w-4" /> },
   delivering: { label: "Em Entrega", color: "bg-blue-100 text-blue-800", icon: <Truck className="h-4 w-4" /> },
   delivered: { label: "Entregue", color: "bg-green-100 text-green-800", icon: <CheckCircle className="h-4 w-4" /> },
-  cancelled: { label: "Cancelado", color: "bg-red-100 text-red-800", icon: <XCircle className="h-4 w-4" /> },
-  pending: { label: "Pendente", color: "bg-orange-100 text-orange-800", icon: <AlertCircle className="h-4 w-4" /> },
-  payment_pending: { label: "Pagamento Pendente", color: "bg-purple-100 text-purple-800", icon: <AlertCircle className="h-4 w-4" /> },
+  cancelled: { label: "Cancelado", color: "bg-red-100 text-red-800", icon: <XCircle className="h-4 w-4" /> }
 }
 
 // Payment status translations and colors
@@ -205,10 +101,11 @@ interface OrderDelivery {
   time: string | null;
 }
 
-type OrderStatus = "preparing" | "delivering" | "delivered" | "cancelled" | "pending" | "payment_pending";
+type OrderStatus = "payment_pending" | "pending" | "preparing" | "delivering" | "delivered" | "cancelled";
 type OrderType = "delivery" | "pickup";
 
 interface Order {
+  docId: string;
   id: string;
   userId: string;
   user: User;
@@ -223,33 +120,101 @@ interface Order {
 
 type SortableKey = "createdAt" | "status" | "total";
 
+// Status order mapping
+const statusOrder = {
+  payment_pending: 1,
+  pending: 2,
+  preparing: 3,
+  delivering: 4,
+  delivered: 5,
+  cancelled: 6
+}
+
 export default function AdminOrders() {
   const { toast } = useToast()
   const { user } = useAuth()
-  const [orders, setOrders] = useState<Order[]>(mockOrders)
-  const [filteredOrders, setFilteredOrders] = useState<Order[]>(mockOrders)
+  const [orders, setOrders] = useState<Order[]>([])
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [dateFilter, setDateFilter] = useState("today")
+  const [dateFilter, setDateFilter] = useState("all")
   const [sortConfig, setSortConfig] = useState<{ key: SortableKey; direction: "asc" | "desc" }>({ key: "createdAt", direction: "desc" })
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [orderDetailsOpen, setOrderDetailsOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Atualiza os pedidos com o ID do usuário logado
+  // Carregar pedidos do Firestore
   useEffect(() => {
-    if (user) {
-      const updatedOrders = mockOrders.map(order => ({
-        ...order,
-        userId: user.uid,
-        user: {
-          ...order.user,
-          uid: user.uid
-        }
-      }))
-      setOrders(updatedOrders)
-      setFilteredOrders(updatedOrders)
+    const carregarPedidos = async () => {
+      try {
+        setIsLoading(true)
+        const ordersRef = collection(db, 'orders')
+        const q = query(
+          ordersRef,
+          orderBy('createdAt', 'desc')
+        )
+        
+        const querySnapshot = await getDocs(q)
+        
+        const pedidosCarregados = querySnapshot.docs.map(doc => {
+          const data = doc.data()
+          let createdAt: Date
+
+          // Tenta converter a data de diferentes formatos
+          if (data.createdAt?.toDate) {
+            // Se for um Timestamp do Firestore
+            createdAt = data.createdAt.toDate()
+          } else if (data.createdAt instanceof Date) {
+            // Se já for um objeto Date
+            createdAt = data.createdAt
+          } else if (typeof data.createdAt === 'string') {
+            // Se for uma string de data
+            createdAt = new Date(data.createdAt)
+          } else {
+            // Se não houver data, usa a data atual
+            createdAt = new Date()
+          }
+
+          // Normaliza o status
+          let status = data.status || 'payment_pending'
+          if (status === 'processing') status = 'preparing'
+          if (status === 'canceled') status = 'cancelled'
+
+          const order = {
+            docId: doc.id,
+            id: data.id || doc.id,
+            userId: data.userId || '',
+            user: data.user || { name: '', phone: '' },
+            type: data.type || 'delivery',
+            status: status as OrderStatus,
+            delivery: data.delivery || { address: '', time: null },
+            items: data.items || [],
+            payment: data.payment || { method: 'cash', total: 0, status: 'pending' },
+            notes: data.notes || '',
+            createdAt: createdAt.toISOString()
+          }
+
+          return order as unknown as Order
+        })
+
+        setOrders(pedidosCarregados)
+        setFilteredOrders(pedidosCarregados)
+        setIsLoading(false)
+        // Log dos status carregados
+        console.log('Status dos pedidos carregados:', pedidosCarregados.map(p => p.status))
+      } catch (error) {
+        console.error('Erro ao carregar pedidos:', error)
+        toast({
+          title: "Erro",
+          description: "Não foi possível carregar os pedidos.",
+          variant: "destructive",
+        })
+        setIsLoading(false)
+      }
     }
-  }, [user])
+
+    carregarPedidos()
+  }, [])
 
   // Handle search and filtering
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -283,7 +248,9 @@ export default function AdminOrders() {
 
     // Apply status filter
     if (status !== "all") {
-      result = result.filter((order) => order.status === status)
+      result = result.filter((order) => {
+        return order.status === status
+      })
     }
 
     // Apply date filter
@@ -337,14 +304,6 @@ export default function AdminOrders() {
 
       if (key === "status") {
         // Ordem específica para status
-        const statusOrder = {
-          "preparing": 1,
-          "delivering": 2,
-          "delivered": 3,
-          "cancelled": 4,
-          "pending": 5,
-          "payment_pending": 6
-        }
         aValue = statusOrder[a.status]
         bValue = statusOrder[b.status]
       } else if (key === "total") {
@@ -388,9 +347,9 @@ export default function AdminOrders() {
   }
 
   // Atualiza o status do pedido
-  const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
+  const updateOrderStatus = async (orderDocId: string, newStatus: OrderStatus) => {
     try {
-      const orderRef = doc(db, "orders", orderId)
+      const orderRef = doc(db, "orders", orderDocId)
       await updateDoc(orderRef, {
         status: newStatus,
         updatedAt: serverTimestamp()
@@ -398,13 +357,13 @@ export default function AdminOrders() {
 
       setOrders(prevOrders =>
         prevOrders.map(order =>
-          order.id === orderId ? { ...order, status: newStatus } : order
+          order.docId === orderDocId ? { ...order, status: newStatus } : order
         )
       )
 
       setFilteredOrders(prevOrders =>
         prevOrders.map(order =>
-          order.id === orderId ? { ...order, status: newStatus } : order
+          order.docId === orderDocId ? { ...order, status: newStatus } : order
         )
       )
 
@@ -424,13 +383,46 @@ export default function AdminOrders() {
 
   // Substitui a função handleStatusChange existente
   const handleStatusChange = (orderId: string, newStatus: OrderStatus) => {
-    updateOrderStatus(orderId, newStatus)
+    // Busca o pedido pelo id interno e pega o docId
+    const pedido = orders.find(o => o.id === orderId)
+    if (pedido && pedido.docId) {
+      updateOrderStatus(pedido.docId, newStatus)
+    }
   }
 
   // View order details
   const viewOrderDetails = (order: Order) => {
     setSelectedOrder(order)
     setOrderDetailsOpen(true)
+  }
+
+  // Função para imprimir detalhes do pedido
+  const handlePrint = (order: Order) => {
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.write('<html><head><title>Imprimir Pedido</title></head><body>')
+      printWindow.document.write(`<h2>Pedido ${order.id}</h2>`)
+      printWindow.document.write(`<p><strong>Cliente:</strong> ${order.user.name}</p>`)
+      printWindow.document.write(`<p><strong>Telefone:</strong> ${order.user.phone}</p>`)
+      printWindow.document.write(`<p><strong>Data:</strong> ${formatDate(order.createdAt)}</p>`)
+      printWindow.document.write('<h4>Itens:</h4><ul>')
+      order.items.forEach(item => {
+        printWindow.document.write(`<li>${item.quantity}x ${item.name} - R$ ${(item.price * item.quantity).toFixed(2)}</li>`)
+      })
+      printWindow.document.write('</ul>')
+      printWindow.document.write(`<p><strong>Total:</strong> R$ ${order.payment.total.toFixed(2)}</p>`)
+      printWindow.document.write(`<p><strong>Status:</strong> ${statusInfo[order.status].label}</p>`)
+      printWindow.document.write('</body></html>')
+      printWindow.document.close()
+      printWindow.print()
+    }
+  }
+
+  // Função para contatar cliente via WhatsApp
+  const handleContact = (order: Order) => {
+    const phone = order.user.phone.replace(/\D/g, '') // Remove caracteres não numéricos
+    const url = `https://wa.me/55${phone}`
+    window.open(url, '_blank')
   }
 
   return (
@@ -455,11 +447,12 @@ export default function AdminOrders() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os Status</SelectItem>
+                <SelectItem value="payment_pending">Pagamento Pendente</SelectItem>
+                <SelectItem value="pending">Pendente</SelectItem>
                 <SelectItem value="preparing">Em Preparo</SelectItem>
                 <SelectItem value="delivering">Em Entrega</SelectItem>
                 <SelectItem value="delivered">Entregue</SelectItem>
                 <SelectItem value="cancelled">Cancelado</SelectItem>
-                <SelectItem value="pending">Pendente</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -487,132 +480,168 @@ export default function AdminOrders() {
           <CardDescription>{filteredOrders.length} pedidos encontrados</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-4 font-medium">ID</th>
-                  <th className="text-left py-3 px-4 font-medium">Cliente</th>
-                  <th className="text-left py-3 px-4 font-medium">
-                    <div className="flex items-center cursor-pointer" onClick={() => requestSort("createdAt")}>
-                      Data
-                      {sortConfig.key === "createdAt" &&
-                        (sortConfig.direction === "asc" ? (
-                          <ChevronUp className="h-4 w-4 ml-1" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 ml-1" />
-                        ))}
-                    </div>
-                  </th>
-                  <th className="text-left py-3 px-4 font-medium">
-                    <div className="flex items-center cursor-pointer" onClick={() => requestSort("total")}>
-                      Valor
-                      {sortConfig.key === "total" &&
-                        (sortConfig.direction === "asc" ? (
-                          <ChevronUp className="h-4 w-4 ml-1" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 ml-1" />
-                        ))}
-                    </div>
-                  </th>
-                  <th className="text-left py-3 px-4 font-medium">
-                    <div className="flex items-center cursor-pointer" onClick={() => requestSort("status")}>
-                      Status
-                      {sortConfig.key === "status" &&
-                        (sortConfig.direction === "asc" ? (
-                          <ChevronUp className="h-4 w-4 ml-1" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 ml-1" />
-                        ))}
-                    </div>
-                  </th>
-                  <th className="text-left py-3 px-4 font-medium">Pagamento</th>
-                  <th className="text-left py-3 px-4 font-medium">Entrega</th>
-                  <th className="text-center py-3 px-4 font-medium">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center py-8 text-neutral-500">
-                      Nenhum pedido encontrado com os filtros selecionados.
-                    </td>
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Carregando pedidos...</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4 font-medium">ID</th>
+                    <th className="text-left py-3 px-4 font-medium">Cliente</th>
+                    <th className="text-left py-3 px-4 font-medium">
+                      <div className="flex items-center cursor-pointer" onClick={() => requestSort("createdAt")}>
+                        Data
+                        {sortConfig.key === "createdAt" &&
+                          (sortConfig.direction === "asc" ? (
+                            <ChevronUp className="h-4 w-4 ml-1" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 ml-1" />
+                          ))}
+                      </div>
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium">
+                      <div className="flex items-center cursor-pointer" onClick={() => requestSort("total")}>
+                        Valor
+                        {sortConfig.key === "total" &&
+                          (sortConfig.direction === "asc" ? (
+                            <ChevronUp className="h-4 w-4 ml-1" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 ml-1" />
+                          ))}
+                      </div>
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium">
+                      <div className="flex items-center cursor-pointer" onClick={() => requestSort("status")}>
+                        Status
+                        {sortConfig.key === "status" &&
+                          (sortConfig.direction === "asc" ? (
+                            <ChevronUp className="h-4 w-4 ml-1" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 ml-1" />
+                          ))}
+                      </div>
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium">Pagamento</th>
+                    <th className="text-left py-3 px-4 font-medium">Entrega</th>
+                    <th className="text-center py-3 px-4 font-medium">Ações</th>
                   </tr>
-                ) : (
-                  filteredOrders.map((order) => (
-                    <tr key={order.id} className="border-b hover:bg-neutral-50">
-                      <td className="py-3 px-4 font-medium">{order.id}</td>
-                      <td className="py-3 px-4">
-                        <div>{order.user.name}</div>
-                        <div className="text-xs text-neutral-500">{order.user.phone}</div>
-                      </td>
-                      <td className="py-3 px-4">{formatDate(order.createdAt)}</td>
-                      <td className="py-3 px-4">R$ {order.payment.total.toFixed(2)}</td>
-                      <td className="py-3 px-4">
-                        <Badge
-                          className={`${statusInfo[order.status].color} font-normal flex items-center gap-1 w-fit`}
-                        >
-                          {statusInfo[order.status].icon}
-                          {statusInfo[order.status].label}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-1">
-                          <span>{paymentMethodInfo[order.payment.method].icon}</span>
-                          <span className="text-xs">{paymentMethodInfo[order.payment.method].label}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-xs">{order.type === "delivery" ? "Entrega" : "Retirada"}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex justify-center">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => viewOrderDetails(order)}>
-                                <Eye className="h-4 w-4 mr-2" /> Ver Detalhes
-                              </DropdownMenuItem>
-
-                              {order.status === "preparing" && (
-                                <DropdownMenuItem onClick={() => handleStatusChange(order.id, "delivering")}>
-                                  <Truck className="h-4 w-4 mr-2" /> Marcar como Em Entrega
-                                </DropdownMenuItem>
-                              )}
-
-                              {(order.status === "preparing" || order.status === "delivering") && (
-                                <DropdownMenuItem onClick={() => handleStatusChange(order.id, "delivered")}>
-                                  <CheckCircle className="h-4 w-4 mr-2" /> Marcar como Entregue
-                                </DropdownMenuItem>
-                              )}
-
-                              {(order.status === "preparing" || order.status === "delivering") && (
-                                <DropdownMenuItem onClick={() => handleStatusChange(order.id, "cancelled")}>
-                                  <XCircle className="h-4 w-4 mr-2" /> Cancelar Pedido
-                                </DropdownMenuItem>
-                              )}
-
-                              <DropdownMenuItem>
-                                <Printer className="h-4 w-4 mr-2" /> Imprimir
-                              </DropdownMenuItem>
-
-                              <DropdownMenuItem>
-                                <MessageSquare className="h-4 w-4 mr-2" /> Contatar Cliente
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                </thead>
+                <tbody>
+                  {filteredOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="text-center py-8 text-neutral-500">
+                        Nenhum pedido encontrado com os filtros selecionados.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    filteredOrders.map((order) => (
+                      <tr key={order.id} className="border-b hover:bg-neutral-50">
+                        <td className="py-3 px-4 font-medium">{order.id}</td>
+                        <td className="py-3 px-4">
+                          <div>{order.user.name}</div>
+                          <div className="text-xs text-neutral-500">{order.user.phone}</div>
+                        </td>
+                        <td className="py-3 px-4">{formatDate(order.createdAt)}</td>
+                        <td className="py-3 px-4">R$ {order.payment.total.toFixed(2)}</td>
+                        <td className="py-3 px-4">
+                          <Badge
+                            className={`${statusInfo[order.status].color} font-normal flex items-center gap-1 w-fit`}
+                          >
+                            {statusInfo[order.status].icon}
+                            {statusInfo[order.status].label}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1">
+                            <span>{paymentMethodInfo[order.payment.method].icon}</span>
+                            <span className="text-xs">{paymentMethodInfo[order.payment.method].label}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-xs">{order.type === "delivery" ? "Entrega" : "Retirada"}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex justify-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => viewOrderDetails(order)}>
+                                  <Eye className="h-4 w-4 mr-2" /> Ver Detalhes
+                                </DropdownMenuItem>
+
+                                {/* payment_pending: cancelar */}
+                                {order.status === "payment_pending" && (
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, "cancelled")}> 
+                                    <XCircle className="h-4 w-4 mr-2" /> Cancelar Pedido
+                                  </DropdownMenuItem>
+                                )}
+
+                                {/* pending: aceitar (preparing) ou recusar (cancelled) */}
+                                {order.status === "pending" && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "preparing")}> 
+                                      <CheckCircle className="h-4 w-4 mr-2" /> Aceitar Pedido
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "cancelled")}> 
+                                      <XCircle className="h-4 w-4 mr-2" /> Recusar Pedido
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+
+                                {/* preparing: em entrega, entregue, cancelar */}
+                                {order.status === "preparing" && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "delivering")}> 
+                                      <Truck className="h-4 w-4 mr-2" /> Marcar como Em Entrega
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "delivered")}> 
+                                      <CheckCircle className="h-4 w-4 mr-2" /> Marcar como Entregue
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "cancelled")}> 
+                                      <XCircle className="h-4 w-4 mr-2" /> Cancelar Pedido
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+
+                                {/* delivering: entregue, cancelar por não entregue */}
+                                {order.status === "delivering" && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "delivered")}> 
+                                      <CheckCircle className="h-4 w-4 mr-2" /> Marcar como Entregue
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "cancelled")}> 
+                                      <XCircle className="h-4 w-4 mr-2" /> Cancelar (Não Entregue)
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+
+                                {/* delivered/cancelled: apenas ações normais */}
+                                <DropdownMenuItem onClick={() => handlePrint(order)}>
+                                  <Printer className="h-4 w-4 mr-2" /> Imprimir
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem onClick={() => handleContact(order)}>
+                                  <MessageSquare className="h-4 w-4 mr-2" /> Contatar Cliente
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -703,11 +732,6 @@ export default function AdminOrders() {
                   <Badge className="bg-neutral-100 text-neutral-800">
                     {selectedOrder.type === "delivery" ? "Entrega" : "Retirada"}
                   </Badge>
-                </div>
-
-                <div>
-                  <h4 className="font-medium mb-2">Histórico de Pedidos</h4>
-                  <div className="text-sm text-neutral-500">Este cliente fez 5 pedidos nos últimos 3 meses.</div>
                 </div>
               </TabsContent>
 

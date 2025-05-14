@@ -59,7 +59,7 @@ interface OrderDelivery {
 interface Order {
   id: string
   date: Date
-  status: 'processing' | 'delivering' | 'delivered' | 'canceled'
+  status: 'preparing' | 'delivering' | 'delivered' | 'cancelled' | 'pending' | 'payment_pending'
   items: OrderItem[]
   total: number
   delivery: OrderDelivery
@@ -264,6 +264,8 @@ export default function OrdersPage() {
                     <SelectItem value="delivering">Em Entrega</SelectItem>
                     <SelectItem value="delivered">Entregue</SelectItem>
                     <SelectItem value="cancelled">Cancelado</SelectItem>
+                    <SelectItem value="pending">Pendente</SelectItem>
+                    <SelectItem value="payment_pending">Aguardando Pagamento</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -424,13 +426,13 @@ export default function OrdersPage() {
 
                 <div className="grid grid-cols-4 gap-2 mt-4">
                   <div
-                    className={`p-3 flex flex-col items-center text-center ${selectedOrder.status === "processing" || selectedOrder.status === "delivering" || selectedOrder.status === "delivered" ? "text-black" : "text-neutral-400"}`}
+                    className={`p-3 flex flex-col items-center text-center ${selectedOrder.status === "preparing" || selectedOrder.status === "delivering" || selectedOrder.status === "delivered" ? "text-black" : "text-neutral-400"}`}
                   >
                     <Check className="h-5 w-5 mb-1" />
                     <span className="text-xs">Confirmado</span>
                   </div>
                   <div
-                    className={`p-3 flex flex-col items-center text-center ${selectedOrder.status === "processing" || selectedOrder.status === "delivering" || selectedOrder.status === "delivered" ? "text-black" : "text-neutral-400"}`}
+                    className={`p-3 flex flex-col items-center text-center ${selectedOrder.status === "preparing" || selectedOrder.status === "delivering" || selectedOrder.status === "delivered" ? "text-black" : "text-neutral-400"}`}
                   >
                     <Clock className="h-5 w-5 mb-1" />
                     <span className="text-xs">Em Preparo</span>
