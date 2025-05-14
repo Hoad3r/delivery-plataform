@@ -20,11 +20,13 @@ import { useAuth } from "@/context/auth-context"
 import { db } from "@/lib/firebase"
 
 // Status translations
-const statusTranslations: Record<Order['status'], { label: string; color: string }> = {
-  processing: { label: "Em preparo", color: "bg-yellow-100 text-yellow-800" },
+const statusTranslations: Record<string, { label: string; color: string }> = {
+  preparing: { label: "Em preparo", color: "bg-yellow-100 text-yellow-800" },
   delivering: { label: "Em entrega", color: "bg-blue-100 text-blue-800" },
   delivered: { label: "Entregue", color: "bg-green-100 text-green-800" },
-  canceled: { label: "Cancelado", color: "bg-red-100 text-red-800" },
+  cancelled: { label: "Cancelado", color: "bg-red-100 text-red-800" },
+  pending: { label: "Pendente", color: "bg-gray-100 text-gray-800" },
+  payment_pending: { label: "Aguardando Pagamento", color: "bg-orange-100 text-orange-800" }
 }
 
 // Payment method translations
@@ -46,6 +48,7 @@ interface OrderItem {
 interface OrderPayment {
   method: 'credit' | 'debit' | 'pix' | 'cash'
   card?: string
+  total: number
 }
 
 interface OrderDelivery {
@@ -109,7 +112,7 @@ export default function OrdersPage() {
         const q = query(
           ordersRef,
           where('userId', '==', user.id),
-          orderBy('date', 'desc')
+          orderBy('createdAt', 'desc')
         )
         
         const querySnapshot = await getDocs(q)
@@ -118,8 +121,9 @@ export default function OrdersPage() {
           const pedidosCarregados = querySnapshot.docs.map(doc => {
             const data = doc.data()
             return {
+              id: doc.id,
               ...data,
-              date: data.date?.toDate() || new Date(),
+              date: new Date(data.createdAt),
             }
           }) as Order[]
 
@@ -256,10 +260,10 @@ export default function OrdersPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos os Status</SelectItem>
-                    <SelectItem value="processing">Em Preparo</SelectItem>
+                    <SelectItem value="preparing">Em Preparo</SelectItem>
                     <SelectItem value="delivering">Em Entrega</SelectItem>
                     <SelectItem value="delivered">Entregue</SelectItem>
-                    <SelectItem value="canceled">Cancelado</SelectItem>
+                    <SelectItem value="cancelled">Cancelado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -387,7 +391,7 @@ export default function OrdersPage() {
                     </div>
 
                     <div className="md:text-right mt-4 md:mt-0">
-                      <div className="font-medium">Total: R$ {order.total.toFixed(2)}</div>
+                      <div className="font-medium">Total: R$ {order.payment.total.toFixed(2)}</div>
                       <div className="text-sm text-neutral-500 mt-1">
                         {paymentMethodTranslations[order.payment.method]} {order.payment.card && `(${order.payment.card})`}
                       </div>
@@ -465,7 +469,7 @@ export default function OrdersPage() {
 
                 <div className="flex justify-between font-medium">
                   <div>Total</div>
-                  <div>R$ {selectedOrder.total.toFixed(2)}</div>
+                  <div>R$ {selectedOrder.payment.total.toFixed(2)}</div>
                 </div>
               </div>
 
