@@ -86,11 +86,8 @@ type RecentOrder = {
 // Cores para os gráficos
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"]
 
-// Funções para processar os dados reais
 // Função para buscar pedidos do Firestore, filtrando por período
 const fetchOrders = async (timeRange: string) => {
-  console.log("fetchOrders: Iniciando busca com timeRange =", timeRange)
-  
   // Definir a data de início baseada no período selecionado
   let startDate = new Date()
   const now = new Date()
@@ -113,7 +110,6 @@ const fetchOrders = async (timeRange: string) => {
   }
 
   try {
-    console.log("fetchOrders: Consultando collection 'orders'")
     const ordersRef = collection(db, "orders")
     const q = query(
       ordersRef,
@@ -122,9 +118,7 @@ const fetchOrders = async (timeRange: string) => {
       orderBy("createdAt", "desc")
     )
     
-    console.log("fetchOrders: Executando getDocs")
     const snapshot = await getDocs(q)
-    console.log("fetchOrders: Obtidos", snapshot.docs.length, "documentos")
     
     const pedidosCarregados = snapshot.docs.map(doc => {
       const data = doc.data()
@@ -164,29 +158,19 @@ const fetchOrders = async (timeRange: string) => {
         createdAt: createdAt
       }
     })
-
-    console.log("fetchOrders: Transformados", pedidosCarregados.length, "pedidos")
     
-    if (pedidosCarregados.length > 0) {
-      console.log("fetchOrders: Exemplo de pedido processado:", {
-        docId: pedidosCarregados[0].docId,
-        id: pedidosCarregados[0].id,
-        status: pedidosCarregados[0].status,
-        userName: pedidosCarregados[0].user?.name,
-        date: pedidosCarregados[0].createdAt instanceof Date ? pedidosCarregados[0].createdAt.toISOString() : 'não é Date'
-      })
-    }
+    // Filtrar para considerar apenas pedidos entregues
+    const completedOrders = pedidosCarregados.filter(order => order.status === 'delivered')
 
     // Se estiver usando filtro de tempo, aplique-o depois de carregar os dados
     // para garantir que o tratamento de data seja consistente
     const filtered = timeRange === 'all' 
-      ? pedidosCarregados 
-      : pedidosCarregados.filter(order => {
+      ? completedOrders 
+      : completedOrders.filter(order => {
           if (!order.createdAt) return false
           return order.createdAt >= startDate
         })
 
-    console.log("fetchOrders: Após filtro de tempo, restam", filtered.length, "pedidos")
     return filtered
   } catch (error) {
     console.error("Erro ao buscar pedidos:", error)
@@ -219,22 +203,32 @@ const processOrdersByMonth = (orders: any[]): OrderData[] => {
   return months.map(month => monthMap[month])
 }
 
-// Processar dados para clientes (novos vs recorrentes)
-const processCustomerData = (orders: any[]): CustomerData[] => {
-  const customerOrders: Record<string, number> = {}
+// Função para processar clientes (novos vs recorrentes)
+const processCustomerData = (orders: any[], allCustomerCounts: Record<string, number>): CustomerData[] => {
+  // Identificar clientes únicos no período filtrado
+  const customersInPeriod: Record<string, boolean> = {};
   
   orders.forEach(order => {
-    if (!order.userId) return
-    customerOrders[order.userId] = (customerOrders[order.userId] || 0) + 1
-  })
+    if (!order.userId) return;
+    customersInPeriod[order.userId] = true;
+  });
   
-  const newCustomers = Object.values(customerOrders).filter(count => count === 1).length
-  const returningCustomers = Object.values(customerOrders).filter(count => count > 1).length
+  // Lista de IDs dos clientes que fizeram pedidos no período
+  const customerIds = Object.keys(customersInPeriod);
+  
+  // Contar novos vs recorrentes baseado no histórico completo
+  const newCustomers = customerIds.filter(userId => 
+    !allCustomerCounts[userId] || allCustomerCounts[userId] === 1
+  ).length;
+  
+  const returningCustomers = customerIds.filter(userId => 
+    allCustomerCounts[userId] && allCustomerCounts[userId] > 1
+  ).length;
   
   return [
     { name: "Novos", value: newCustomers },
     { name: "Recorrentes", value: returningCustomers }
-  ]
+  ];
 }
 
 // Processar dados para pratos populares
@@ -371,12 +365,8 @@ const processDeliveryTimes = (orders: any[]): DeliveryTime[] => {
 // Processar dados para pedidos recentes
 const processRecentOrders = (orders: any[]): RecentOrder[] => {
   if (!orders || orders.length === 0) {
-    console.log("processRecentOrders: Nenhum pedido para processar")
     return []
   }
-  
-  console.log("processRecentOrders: Processando", orders.length, "pedidos")
-  console.log("Amostra do primeiro pedido:", JSON.stringify(orders[0], null, 2))
   
   const processedOrders = orders
     .slice(0, 5) // Já está ordenado por data desc na consulta
@@ -392,9 +382,6 @@ const processRecentOrders = (orders: any[]): RecentOrder[] => {
       
       return processedOrder;
     });
-  
-  console.log("processRecentOrders: Pedidos processados:", processedOrders.length);
-  console.log("Pedidos recentes processados:", processedOrders);
   
   return processedOrders;
 }
@@ -412,15 +399,61 @@ export default function AdminDashboard() {
   const [weeklyOrders, setWeeklyOrders] = useState<WeeklyOrder[]>([])
   const [deliveryTimes, setDeliveryTimes] = useState<DeliveryTime[]>([])
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
+  // Novo estado para a média de pedidos por cliente
+  const [averageOrdersPerCustomer, setAverageOrdersPerCustomer] = useState(0)
 
   // Estado para controlar se os dados foram carregados
   const [isLoading, setIsLoading] = useState(true)
 
+  // Novo estado para armazenar contagem de todos os pedidos por cliente (independente do período)
+  const [allCustomerOrderCounts, setAllCustomerOrderCounts] = useState<Record<string, number>>({})
+
   // Efeito para carregar os dados quando o componente montar ou timeRange mudar
   useEffect(() => {
+    // Adicionar função para buscar e contar todos os pedidos por cliente
+    const fetchAllCustomerOrders = async () => {
+      try {
+        const ordersRef = collection(db, "orders");
+        const q = query(ordersRef);
+        
+        const snapshot = await getDocs(q);
+        const customerCounts: Record<string, number> = {};
+        
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const userId = data.userId || '';
+          
+          // Normalizar status para garantir consistência
+          let status = data.status || 'pending';
+          if (status === 'processing') status = 'preparing';
+          if (status === 'canceled') status = 'cancelled';
+          
+          // Considerar apenas pedidos que não foram cancelados
+          if (status !== 'cancelled' && userId) {
+            customerCounts[userId] = (customerCounts[userId] || 0) + 1;
+          }
+        });
+        
+        setAllCustomerOrderCounts(customerCounts);
+        
+        // Calcular a média de pedidos por cliente
+        if (Object.keys(customerCounts).length > 0) {
+          const totalCustomers = Object.keys(customerCounts).length;
+          const totalOrders = Object.values(customerCounts).reduce((sum, count) => sum + count, 0);
+          const avgOrdersPerCustomer = totalOrders / totalCustomers;
+          setAverageOrdersPerCustomer(avgOrdersPerCustomer);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados históricos de clientes:", error);
+      }
+    };
+
     const loadData = async () => {
       try {
         setIsLoading(true)
+
+        // Carregar dados históricos de clientes (independente do filtro de período)
+        await fetchAllCustomerOrders();
         
         // Buscar dados reais do Firestore
         const orders = await fetchOrders(timeRange)
@@ -428,7 +461,10 @@ export default function AdminDashboard() {
         
         // Sempre processar os dados, mesmo que orders esteja vazio
         const ordersByMonth = processOrdersByMonth(orders)
-        const customers = processCustomerData(orders)
+        
+        // Usar a nova função que considera histórico completo
+        const customers = processCustomerData(orders, allCustomerOrderCounts)
+        
         const dishes = processPopularDishes(orders)
         const orderTimes = processOrdersByTime(orders)
         const locationData = processOrdersByLocation(orders)
@@ -445,8 +481,8 @@ export default function AdminDashboard() {
         setWeeklyOrders(weekData)
         setDeliveryTimes(deliveryTimeData)
         setRecentOrders(recentOrdersData)
-        
-        setIsLoading(false)
+
+          setIsLoading(false)
       } catch (error) {
         console.error("Erro ao carregar dados:", error)
         
@@ -836,8 +872,10 @@ export default function AdminDashboard() {
               <CardContent>
                 <div className="h-[300px] flex items-center justify-center w-full">
                   <div className="text-center">
-                    <div className="text-4xl font-bold text-primary">{isLoading ? "..." : "3.2"}</div>
-                    <div className="text-sm text-neutral-500 mt-2">Pedidos por cliente (média mensal)</div>
+                    <div className="text-4xl font-bold text-primary">
+                      {isLoading ? "..." : averageOrdersPerCustomer.toFixed(1)}
+                    </div>
+                    <div className="text-sm text-neutral-500 mt-2">Pedidos por cliente (média geral)</div>
                   </div>
                 </div>
               </CardContent>
@@ -1020,25 +1058,25 @@ export default function AdminDashboard() {
                     </tr>
                   ) : (
                     recentOrders.map((order, index) => (
-                      <tr key={index} className={index < recentOrders.length - 1 ? "border-b" : ""}>
-                        <td className="py-3 px-4">{order.id}</td>
-                        <td className="py-3 px-4">{order.customer}</td>
-                        <td className="py-3 px-4">{order.date}</td>
-                        <td className="py-3 px-4">R$ {order.value.toFixed(2)}</td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs ${
-                              order.status === "Em preparo"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : order.status === "Em entrega"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-green-100 text-green-800"
-                            }`}
-                          >
-                            {order.status}
-                          </span>
-                        </td>
-                      </tr>
+                    <tr key={index} className={index < recentOrders.length - 1 ? "border-b" : ""}>
+                      <td className="py-3 px-4">{order.id}</td>
+                      <td className="py-3 px-4">{order.customer}</td>
+                      <td className="py-3 px-4">{order.date}</td>
+                      <td className="py-3 px-4">R$ {order.value.toFixed(2)}</td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs ${
+                            order.status === "Em preparo"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : order.status === "Em entrega"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-green-100 text-green-800"
+                          }`}
+                        >
+                          {order.status}
+                        </span>
+                      </td>
+                    </tr>
                     ))
                   )}
                 </tbody>
