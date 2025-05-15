@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, ReactElement, JSXElementConstructor } from "react"
 import {
   BarChart,
   Bar,
@@ -86,6 +86,77 @@ type RecentOrder = {
 // Cores para os gráficos
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"]
 
+// Função utilitária para normalizar datas do Firestore
+const normalizeFirestoreDate = (dateValue: any): Date => {
+  if (dateValue?.toDate) {
+    // Se for um Timestamp do Firestore
+    return dateValue.toDate();
+  } else if (dateValue instanceof Date) {
+    // Se já for um objeto Date
+    return dateValue;
+  } else if (typeof dateValue === 'string') {
+    // Se for uma string de data
+    return new Date(dateValue);
+  } else if (dateValue?.seconds) {
+    // Se for um objeto Firestore com seconds
+    return new Date(dateValue.seconds * 1000);
+  } else {
+    // Se não houver data, usa a data atual
+    return new Date();
+  }
+}
+
+// Dicionário de termos para identificar partes do endereço
+const ADDRESS_TERMS = {
+  ignored: ['apto', 'apartamento', 'ap', 'bloco', 'bl', 'andar', 'casa', 'residencial', 'condomínio', 'cond'],
+  bairroIndicators: ['bairro', 'jardim', 'jd', 'parque', 'pq', 'vila', 'conj']
+};
+
+// Função para extrair bairro de um endereço
+const extractDistrictFromAddress = (address: string): string => {
+  if (!address) return 'Outros';
+  
+  const parts = address.split(',').map((part: string) => part.trim());
+  let bairro = 'Outros'; // Valor padrão
+  
+  // Primeiro procura por termos indicadores de bairro
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i].toLowerCase();
+    
+    // Verifica se contém indicadores explícitos de bairro
+    const isBairroExplicit = ADDRESS_TERMS.bairroIndicators.some(term => 
+      part.includes(term) || (i > 0 && parts[i-1].toLowerCase().includes('bairro'))
+    );
+    
+    if (isBairroExplicit) {
+      bairro = parts[i];
+      return bairro;
+    }
+  }
+  
+  // Se não encontrou um indicador explícito, procura pelo padrão (geralmente terceiro elemento)
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i].toLowerCase();
+    
+    // Ignora se for apartamento, bloco, número, etc.
+    const shouldIgnore = ADDRESS_TERMS.ignored.some(term => part.includes(term)) || 
+                        /^\d+$/.test(part) || // Apenas números
+                        part.length < 3;      // Muito curto para ser um bairro
+    
+    if (shouldIgnore) {
+      continue;
+    }
+    
+    // Provavelmente é um bairro se não for o primeiro ou segundo elemento
+    if (i >= 2) {
+      bairro = parts[i];
+      break;
+    }
+  }
+  
+  return bairro;
+}
+
 // Função para buscar pedidos do Firestore, filtrando por período
 const fetchOrders = async (timeRange: string) => {
   // Definir a data de início baseada no período selecionado
@@ -122,22 +193,9 @@ const fetchOrders = async (timeRange: string) => {
     
     const pedidosCarregados = snapshot.docs.map(doc => {
       const data = doc.data()
-      let createdAt: Date
-
-      // Trata as diferentes formas que a data pode estar armazenada
-      if (data.createdAt?.toDate) {
-        // Se for um Timestamp do Firestore
-        createdAt = data.createdAt.toDate()
-      } else if (data.createdAt instanceof Date) {
-        // Se já for um objeto Date
-        createdAt = data.createdAt
-      } else if (typeof data.createdAt === 'string') {
-        // Se for uma string de data
-        createdAt = new Date(data.createdAt)
-      } else {
-        // Se não houver data, usa a data atual
-        createdAt = new Date()
-      }
+      
+      // Usar a função utilitária para normalizar a data
+      const createdAt = normalizeFirestoreDate(data.createdAt);
 
       // Normaliza o status (mesmo padrão usado em admin-orders)
       let status = data.status || 'pending'
@@ -155,7 +213,8 @@ const fetchOrders = async (timeRange: string) => {
         items: data.items || [],
         payment: data.payment || { method: 'cash', total: 0, status: 'pending' },
         notes: data.notes || '',
-        createdAt: createdAt
+        createdAt: createdAt,
+        statusHistory: data.statusHistory || {}
       }
     })
     
@@ -298,32 +357,8 @@ const processOrdersByLocation = (orders: any[]): OrderByLocation[] => {
   orders.forEach(order => {
     if (!order.delivery?.address) return
     
-    // Tenta extrair o bairro do endereço de forma mais inteligente
-    const parts = order.delivery.address.split(',').map(part => part.trim());
-    let bairro = 'Outros'; // Valor padrão
-    
-    // Percorre as partes do endereço procurando por um bairro válido
-    // Ignora partes que contêm informações de apartamento ou números
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      
-      // Ignora se for apartamento, bloco, número, etc.
-      if (part.toLowerCase().includes('apto') || 
-          part.toLowerCase().includes('apartamento') ||
-          part.toLowerCase().includes('bloco') ||
-          part.toLowerCase().includes('andar') ||
-          /^\d+$/.test(part) || // Apenas números
-          part.length < 3) { // Muito curto para ser um bairro
-        continue;
-      }
-      
-      // Provavelmente é um bairro se não for o primeiro ou segundo elemento
-      // (geralmente o primeiro é a rua, o segundo é o número)
-      if (i >= 2) {
-        bairro = part;
-        break; // Usa o primeiro candidato a bairro encontrado
-      }
-    }
+    // Usar a função otimizada para extrair bairro
+    const bairro = extractDistrictFromAddress(order.delivery.address);
     
     // Incrementa a contagem para este bairro
     bairroCounts[bairro] = (bairroCounts[bairro] || 0) + 1;
@@ -361,64 +396,17 @@ const processDeliveryTimes = (orders: any[]): DeliveryTime[] => {
   orders.forEach(order => {
     if (!order.delivery?.address || !order.statusHistory) return
     
-    // Extrair bairro com a mesma lógica melhorada
-    const parts = order.delivery.address.split(',').map(part => part.trim());
-    let bairro = 'Outros'; // Valor padrão
-    
-    // Percorre as partes do endereço procurando por um bairro válido
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      
-      // Ignora se for apartamento, bloco, número, etc.
-      if (part.toLowerCase().includes('apto') || 
-          part.toLowerCase().includes('apartamento') ||
-          part.toLowerCase().includes('bloco') ||
-          part.toLowerCase().includes('andar') ||
-          /^\d+$/.test(part) ||
-          part.length < 3) {
-        continue;
-      }
-      
-      // Provavelmente é um bairro se não for o primeiro ou segundo elemento
-      if (i >= 2) {
-        bairro = part;
-        break;
-      }
-    }
+    // Usar a função otimizada para extrair bairro
+    const bairro = extractDistrictFromAddress(order.delivery.address);
     
     // Verificar se temos timestamps de preparing e delivered
     const preparingTime = order.statusHistory.preparing;
     const deliveredTime = order.statusHistory.delivered;
     
     if (preparingTime && deliveredTime) {
-      // Converter para Date se necessário
-      let startTime, endTime;
-      
-      // Tratar preparing time
-      if (preparingTime?.toDate) {
-        startTime = preparingTime.toDate();
-      } else if (preparingTime instanceof Date) {
-        startTime = preparingTime;
-      } else if (typeof preparingTime === 'string') {
-        startTime = new Date(preparingTime);
-      } else if (preparingTime?.seconds) {
-        startTime = new Date(preparingTime.seconds * 1000);
-      } else {
-        return; // Pula se não conseguir determinar a hora de início
-      }
-      
-      // Tratar delivered time
-      if (deliveredTime?.toDate) {
-        endTime = deliveredTime.toDate();
-      } else if (deliveredTime instanceof Date) {
-        endTime = deliveredTime;
-      } else if (typeof deliveredTime === 'string') {
-        endTime = new Date(deliveredTime);
-      } else if (deliveredTime?.seconds) {
-        endTime = new Date(deliveredTime.seconds * 1000);
-      } else {
-        return; // Pula se não conseguir determinar a hora de fim
-      }
+      // Converter para Date usando nossa função utilitária
+      const startTime = normalizeFirestoreDate(preparingTime);
+      const endTime = normalizeFirestoreDate(deliveredTime);
       
       // Calcular diferença em minutos
       const diffMinutes = Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60));
@@ -616,14 +604,14 @@ export default function AdminDashboard() {
   const previousMonthRevenue = orderData.length > 1 ? orderData[orderData.length - 2].revenue : 0
   const revenueGrowth = calculateGrowth(lastMonthRevenue, previousMonthRevenue)
 
-  // Função para renderizar um gráfico com verificação de dados
-  const renderChart = (chartType: string, data: any[], renderFn: () => React.ReactNode) => {
+  // Função para renderizar um gráfico com verificação de dados - corrigida para tipagem
+  const renderChart = (chartType: string, data: any[], renderFn: () => ReactElement<any, string | JSXElementConstructor<any>>): ReactElement<any, string | JSXElementConstructor<any>> => {
     if (isLoading) {
       return (
         <div className="flex h-full items-center justify-center">
           <p className="text-neutral-500">Carregando dados...</p>
         </div>
-      )
+      ) as ReactElement<any, string | JSXElementConstructor<any>>;
     }
 
     if (!data || data.length === 0) {
@@ -631,7 +619,7 @@ export default function AdminDashboard() {
         <div className="flex h-full items-center justify-center">
           <p className="text-neutral-500">Nenhum dado disponível</p>
         </div>
-      )
+      ) as ReactElement<any, string | JSXElementConstructor<any>>;
     }
 
     // Verificar se os dados têm valores significativos
@@ -647,11 +635,11 @@ export default function AdminDashboard() {
         <div className="flex h-full items-center justify-center">
           <p className="text-neutral-500">Dados insuficientes para visualização</p>
         </div>
-      )
+      ) as ReactElement<any, string | JSXElementConstructor<any>>;
     }
 
-    return renderFn()
-  }
+    return renderFn();
+  };
 
   return (
     <div className="space-y-6">
