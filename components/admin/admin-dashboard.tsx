@@ -388,7 +388,7 @@ const processRecentOrders = (orders: any[]): RecentOrder[] => {
 
 export default function AdminDashboard() {
   // Estado para armazenar o período selecionado
-  const [timeRange, setTimeRange] = useState("year")
+  const [timeRange, setTimeRange] = useState("month")
 
   // Estados para armazenar os dados (substitua os dados mockados pelos dados reais da API)
   const [orderData, setOrderData] = useState<OrderData[]>([])
@@ -873,7 +873,7 @@ export default function AdminDashboard() {
                 <div className="h-[300px] flex items-center justify-center w-full">
                   <div className="text-center">
                     <div className="text-4xl font-bold text-primary">
-                      {isLoading ? "..." : averageOrdersPerCustomer.toFixed(1)}
+                      {isLoading ? "..." : averageOrdersPerCustomer}
                     </div>
                     <div className="text-sm text-neutral-500 mt-2">Pedidos por cliente (média geral)</div>
                   </div>

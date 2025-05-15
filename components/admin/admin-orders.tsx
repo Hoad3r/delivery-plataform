@@ -33,9 +33,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, orderBy, getDocs } from "firebase/firestore"
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, orderBy, getDocs, where, limit, startAfter, Timestamp, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/hooks/use-auth"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
 
 // Status translations and colors
 const statusInfo = {
@@ -116,6 +118,7 @@ interface Order {
   items: OrderItem[];
   payment: OrderPayment;
   notes: string;
+  statusHistory?: Record<string, any>;
 }
 
 type SortableKey = "createdAt" | "status" | "total";
@@ -143,46 +146,145 @@ export default function AdminOrders() {
   const [orderDetailsOpen, setOrderDetailsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Carregar pedidos do Firestore
+  // Adicionar estados para paginação
+  const [lastVisible, setLastVisible] = useState<any>(null)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const pageSize = 20 // Número de pedidos carregados por vez - alterado para 1 para testes
+
+  // Carrega pedidos iniciais
   useEffect(() => {
-    const carregarPedidos = async () => {
-      try {
-        setIsLoading(true)
+    carregarPedidos(true)
+  }, [statusFilter, dateFilter])
+
+  // Função para carregar mais pedidos
+  const loadMore = async () => {
+    if (!hasMore || loadingMore) return
+    carregarPedidos(false)
+  }
+
+  // Função otimizada para carregar pedidos
+  const carregarPedidos = async (reset: boolean) => {
+    // Se estiver carregando inicialmente ou carregando mais
+    setIsLoading(reset)
+    setLoadingMore(!reset)
+    
+    try {
+      // 1. Construir query base
         const ordersRef = collection(db, 'orders')
-        const q = query(
-          ordersRef,
-          orderBy('createdAt', 'desc')
-        )
+      let queryConstraints: any[] = []
+      
+      // 2. Adicionar filtros de status
+      if (statusFilter !== "all") {
+        queryConstraints.push(where('status', '==', statusFilter))
+      }
+      
+      // 3. Adicionar filtros de data - adaptados para strings ISO
+      const now = new Date()
+      
+      if (dateFilter === "today") {
+        // Cria string ISO para início do dia atual
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const todayISO = today.toISOString()
         
+        // Cria string ISO para fim do dia atual
+        const tomorrow = new Date(today)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        const tomorrowISO = tomorrow.toISOString()
+        
+        queryConstraints.push(where('createdAt', '>=', todayISO))
+        queryConstraints.push(where('createdAt', '<', tomorrowISO))
+        
+        console.log('Filtrando por hoje (ISO):', todayISO, 'até', tomorrowISO)
+      } else if (dateFilter === "yesterday") {
+        // Cria string ISO para início de ontem
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const yesterday = new Date(today)
+        yesterday.setDate(yesterday.getDate() - 1)
+        const yesterdayISO = yesterday.toISOString()
+        
+        // Cria string ISO para fim de ontem (início de hoje)
+        const todayISO = today.toISOString()
+        
+        queryConstraints.push(where('createdAt', '>=', yesterdayISO))
+        queryConstraints.push(where('createdAt', '<', todayISO))
+        
+        console.log('Filtrando por ontem (ISO):', yesterdayISO, 'até', todayISO)
+      } else if (dateFilter === "week") {
+        // Cria string ISO para 7 dias atrás
+        const weekAgo = new Date(now)
+        weekAgo.setDate(now.getDate() - 7)
+        const weekAgoISO = weekAgo.toISOString()
+        
+        // String ISO para agora (inclui todos os pedidos até agora)
+        const nowISO = now.toISOString()
+        
+        queryConstraints.push(where('createdAt', '>=', weekAgoISO))
+        queryConstraints.push(where('createdAt', '<=', nowISO))
+        
+        console.log('Filtrando pela última semana (ISO):', weekAgoISO, 'até', nowISO)
+      } else if (dateFilter === "month") {
+        // Cria string ISO para 30 dias atrás
+        const monthAgo = new Date(now)
+        monthAgo.setMonth(now.getMonth() - 1)
+        const monthAgoISO = monthAgo.toISOString()
+        
+        // String ISO para agora
+        const nowISO = now.toISOString()
+        
+        queryConstraints.push(where('createdAt', '>=', monthAgoISO))
+        queryConstraints.push(where('createdAt', '<=', nowISO))
+        
+        console.log('Filtrando pelo último mês (ISO):', monthAgoISO, 'até', nowISO)
+      }
+      
+      // 4. Adicionar ordenação (agora ordenando a string ISO, que funciona bem para datas)
+      queryConstraints.push(orderBy('createdAt', 'desc'))
+      
+      // 5. Adicionar paginação
+      if (!reset && lastVisible) {
+        // Se estiver carregando mais, usar startAfter
+        queryConstraints.push(startAfter(lastVisible))
+      }
+      
+      // 6. Limitar número de resultados
+      queryConstraints.push(limit(pageSize))
+      
+      // 7. Executar a consulta
+      const q = query(ordersRef, ...queryConstraints)
         const querySnapshot = await getDocs(q)
         
-        const pedidosCarregados = querySnapshot.docs.map(doc => {
+      // 8. Salvar o último documento para próxima página
+      const docs = querySnapshot.docs
+      const lastDoc = docs[docs.length - 1]
+      setLastVisible(lastDoc || null)
+      
+      // Verificar se há mais resultados para carregar
+      setHasMore(docs.length === pageSize)
+      
+      // 9. Processar os resultados
+      const pedidosCarregados = docs.map(doc => {
           const data = doc.data()
           let createdAt: Date
 
-          // Tenta converter a data de diferentes formatos
           if (data.createdAt?.toDate) {
-            // Se for um Timestamp do Firestore
             createdAt = data.createdAt.toDate()
           } else if (data.createdAt instanceof Date) {
-            // Se já for um objeto Date
             createdAt = data.createdAt
           } else if (typeof data.createdAt === 'string') {
-            // Se for uma string de data
             createdAt = new Date(data.createdAt)
           } else {
-            // Se não houver data, usa a data atual
             createdAt = new Date()
           }
 
           // Normaliza o status
-          let status = data.status || 'payment_pending'
+        let status = data.status || 'payment_pending'
           if (status === 'processing') status = 'preparing'
           if (status === 'canceled') status = 'cancelled'
 
           const order = {
-            docId: doc.id,
-            id: data.id || doc.id,
+          docId: doc.id,
+          id: data.id || doc.id,
             userId: data.userId || '',
             user: data.user || { name: '', phone: '' },
             type: data.type || 'delivery',
@@ -191,17 +293,25 @@ export default function AdminOrders() {
             items: data.items || [],
             payment: data.payment || { method: 'cash', total: 0, status: 'pending' },
             notes: data.notes || '',
-            createdAt: createdAt.toISOString()
+            createdAt: createdAt.toISOString(),
+            statusHistory: data.statusHistory || {}
           }
 
           return order as unknown as Order
         })
 
+      // 10. Atualizar o estado
+      if (reset) {
+        // Resetar lista se for carregamento inicial
         setOrders(pedidosCarregados)
         setFilteredOrders(pedidosCarregados)
-        setIsLoading(false)
-        // Log dos status carregados
-        console.log('Status dos pedidos carregados:', pedidosCarregados.map(p => p.status))
+      } else {
+        // Adicionar à lista existente se estiver carregando mais
+        setOrders(prev => [...prev, ...pedidosCarregados])
+        setFilteredOrders(prev => [...prev, ...pedidosCarregados])
+      }
+      
+      console.log(`Carregados ${pedidosCarregados.length} pedidos. Há mais? ${hasMore}`)
       } catch (error) {
         console.error('Erro ao carregar pedidos:', error)
         toast({
@@ -209,85 +319,44 @@ export default function AdminOrders() {
           description: "Não foi possível carregar os pedidos.",
           variant: "destructive",
         })
+    } finally {
         setIsLoading(false)
+      setLoadingMore(false)
       }
     }
 
-    carregarPedidos()
-  }, [])
-
-  // Handle search and filtering
+  // Handle search e filtering
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const term = e.target.value.toLowerCase()
     setSearchTerm(term)
-    applyFilters(term, statusFilter, dateFilter)
+    
+    if (term === '') {
+      setFilteredOrders(orders)
+      return
+    }
+    
+    const filtered = orders.filter(
+        (order) =>
+          order.id.toLowerCase().includes(term) ||
+          order.user.name.toLowerCase().includes(term) ||
+        order.user.phone.toLowerCase().includes(term)
+    )
+    
+    setFilteredOrders(filtered)
   }
 
   const handleStatusFilter = (value: string) => {
     setStatusFilter(value)
-    applyFilters(searchTerm, value, dateFilter)
+    // Quando o status muda, resetamos para carregar novos pedidos
+    setLastVisible(null)
+    setHasMore(true)
   }
 
   const handleDateFilter = (value: string) => {
     setDateFilter(value)
-    applyFilters(searchTerm, statusFilter, value)
-  }
-
-  const applyFilters = (term: string, status: string, date: string) => {
-    let result = [...orders]
-
-    // Apply search term
-    if (term) {
-      result = result.filter(
-        (order) =>
-          order.id.toLowerCase().includes(term) ||
-          order.user.name.toLowerCase().includes(term) ||
-          order.user.phone.toLowerCase().includes(term),
-      )
-    }
-
-    // Apply status filter
-    if (status !== "all") {
-      result = result.filter((order) => {
-        return order.status === status
-      })
-    }
-
-    // Apply date filter
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
-    const lastWeek = new Date(today)
-    lastWeek.setDate(lastWeek.getDate() - 7)
-    const lastMonth = new Date(today)
-    lastMonth.setMonth(lastMonth.getMonth() - 1)
-
-    if (date === "today") {
-      result = result.filter((order) => new Date(order.createdAt) >= today)
-    } else if (date === "yesterday") {
-      result = result.filter((order) => new Date(order.createdAt) >= yesterday && new Date(order.createdAt) < today)
-    } else if (date === "week") {
-      result = result.filter((order) => new Date(order.createdAt) >= lastWeek)
-    } else if (date === "month") {
-      result = result.filter((order) => new Date(order.createdAt) >= lastMonth)
-    }
-
-    // Apply sorting
-    result.sort((a, b) => {
-      const aValue = a[sortConfig.key as keyof Order]
-      const bValue = b[sortConfig.key as keyof Order]
-      
-      if (aValue < bValue) {
-        return sortConfig.direction === "asc" ? -1 : 1
-      }
-      if (aValue > bValue) {
-        return sortConfig.direction === "asc" ? 1 : -1
-      }
-      return 0
-    })
-
-    setFilteredOrders(result)
+    // Quando a data muda, resetamos para carregar novos pedidos
+    setLastVisible(null)
+    setHasMore(true)
   }
 
   // Handle sorting
@@ -299,20 +368,21 @@ export default function AdminOrders() {
     setSortConfig({ key, direction })
 
     const sortedOrders = [...filteredOrders].sort((a, b) => {
-      let aValue: any
-      let bValue: any
-
-      if (key === "status") {
-        // Ordem específica para status
-        aValue = statusOrder[a.status]
-        bValue = statusOrder[b.status]
-      } else if (key === "total") {
-        aValue = a.payment.total
-        bValue = b.payment.total
+      // Tratar especificamente o caso do "total" que está dentro de payment
+      let aValue, bValue;
+      
+      if (key === "total") {
+        aValue = a.payment.total;
+        bValue = b.payment.total;
       } else {
-        aValue = a[key]
-        bValue = b[key]
+        aValue = a[key as keyof Order];
+        bValue = b[key as keyof Order];
       }
+      
+      // Lidar com valores undefined
+      if (aValue === undefined && bValue === undefined) return 0
+      if (aValue === undefined) return direction === "asc" ? -1 : 1
+      if (bValue === undefined) return direction === "asc" ? 1 : -1
       
       if (aValue < bValue) {
         return direction === "asc" ? -1 : 1
@@ -346,15 +416,50 @@ export default function AdminOrders() {
     }
   }
 
-  // Atualiza o status do pedido
+  // Atualiza o status do pedido - versão melhorada
   const updateOrderStatus = async (orderDocId: string, newStatus: OrderStatus) => {
     try {
-      const orderRef = doc(db, "orders", orderDocId)
-      await updateDoc(orderRef, {
+      console.log(`Atualizando pedido ${orderDocId} para status: ${newStatus}`);
+      
+      const now = new Date();
+      
+      // Dados para atualização
+      const updateData = {
         status: newStatus,
-        updatedAt: serverTimestamp()
-      })
+        updatedAt: serverTimestamp(),
+        // Adiciona a nova entrada de histórico
+        [`statusHistory.${newStatus}`]: serverTimestamp()
+      };
+      
+      const orderRef = doc(db, "orders", orderDocId)
+      await updateDoc(orderRef, updateData)
 
+      // Após atualizar, recarregue o pedido para ter os dados atualizados
+      // incluindo o histórico de status
+      if (selectedOrder && selectedOrder.docId === orderDocId) {
+        // Recarregar o pedido específico com dados atualizados
+        try {
+          const updatedOrderDoc = await getDoc(orderRef);
+          if (updatedOrderDoc.exists()) {
+            const data = updatedOrderDoc.data();
+            
+            // Convertendo o documento atualizado para o formato Order
+            const updatedOrder = {
+              ...selectedOrder,
+              status: newStatus,
+              statusHistory: data.statusHistory || {},
+              updatedAt: now.toISOString()
+            };
+            
+            setSelectedOrder(updatedOrder);
+            console.log("Pedido selecionado atualizado com histórico:", updatedOrder);
+          }
+        } catch (error) {
+          console.error("Erro ao recarregar pedido atualizado:", error);
+        }
+      }
+
+      // Atualizar os arrays de pedidos
       setOrders(prevOrders =>
         prevOrders.map(order =>
           order.docId === orderDocId ? { ...order, status: newStatus } : order
@@ -371,6 +476,11 @@ export default function AdminOrders() {
         title: "Status atualizado",
         description: "O status do pedido foi atualizado com sucesso.",
       })
+      
+      // Se estiver com filtro de status ativo, pode ser necessário recarregar a lista
+      if (statusFilter !== "all") {
+        carregarPedidos(true); // Reset para carregar novos pedidos
+      }
     } catch (error) {
       console.error("Erro ao atualizar status:", error)
       toast({
@@ -381,17 +491,41 @@ export default function AdminOrders() {
     }
   }
 
-  // Substitui a função handleStatusChange existente
+  // Corrigir a função handleStatusChange para usar o docId diretamente
   const handleStatusChange = (orderId: string, newStatus: OrderStatus) => {
-    // Busca o pedido pelo id interno e pega o docId
-    const pedido = orders.find(o => o.id === orderId)
-    if (pedido && pedido.docId) {
-      updateOrderStatus(pedido.docId, newStatus)
+    // Log para debug
+    console.log(`Tentando alterar status do pedido ID: ${orderId} para ${newStatus}`);
+    
+    // Verificar se está usando ID interno ou docId
+    const pedido = orders.find(o => o.id === orderId);
+    
+    if (!pedido) {
+      console.error(`Pedido com ID ${orderId} não encontrado!`);
+      toast({
+        title: "Erro",
+        description: "Pedido não encontrado.",
+        variant: "destructive",
+      });
+      return;
     }
+    
+    if (!pedido.docId) {
+      console.error(`DocId não encontrado para pedido ${orderId}`);
+      toast({
+        title: "Erro",
+        description: "ID do documento não encontrado.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log(`DocId encontrado: ${pedido.docId}. Atualizando status...`);
+    updateOrderStatus(pedido.docId, newStatus);
   }
 
   // View order details
   const viewOrderDetails = (order: Order) => {
+    console.log("Visualizando detalhes do pedido:", order.id, "Status atual:", order.status);
     setSelectedOrder(order)
     setOrderDetailsOpen(true)
   }
@@ -424,6 +558,72 @@ export default function AdminOrders() {
     const url = `https://wa.me/55${phone}`
     window.open(url, '_blank')
   }
+
+  // Processar o histórico de status para a linha do tempo
+  const getStatusTimeline = (order: Order) => {
+    const timeline = [];
+    
+    // Sempre adicionar a criação do pedido (a partir do createdAt)
+    timeline.push({
+      status: 'created',
+      label: 'Pedido recebido',
+      timestamp: order.createdAt ? new Date(order.createdAt) : new Date(),
+      icon: <CheckCircle className="h-3 w-3 text-green-600" />,
+      bgColor: 'bg-green-100',
+    });
+    
+    // Adicionar entradas do histórico se disponível
+    if (order.statusHistory) {
+      // Mapear status para informações na timeline
+      const statusEntries = [
+        { key: 'payment_pending', label: 'Pagamento pendente', icon: <AlertCircle className="h-3 w-3 text-purple-600" />, bgColor: 'bg-purple-100' },
+        { key: 'pending', label: 'Pedido pendente', icon: <AlertCircle className="h-3 w-3 text-orange-600" />, bgColor: 'bg-orange-100' },
+        { key: 'preparing', label: 'Em preparo', icon: <Clock className="h-3 w-3 text-yellow-600" />, bgColor: 'bg-yellow-100' },
+        { key: 'delivering', label: 'Em entrega', icon: <Truck className="h-3 w-3 text-blue-600" />, bgColor: 'bg-blue-100' },
+        { key: 'delivered', label: 'Entregue', icon: <CheckCircle className="h-3 w-3 text-green-600" />, bgColor: 'bg-green-100' },
+        { key: 'cancelled', label: 'Cancelado', icon: <XCircle className="h-3 w-3 text-red-600" />, bgColor: 'bg-red-100' },
+      ];
+      
+      // Adicionar cada status que existe no histórico
+      statusEntries.forEach(entry => {
+        if (order.statusHistory && order.statusHistory[entry.key]) {
+          // Converter o timestamp para Date se necessário
+          let timestamp;
+          const statusTime = order.statusHistory[entry.key];
+          
+          if (statusTime?.toDate) {
+            // Se for um Timestamp do Firestore
+            timestamp = statusTime.toDate();
+          } else if (statusTime instanceof Date) {
+            // Se já for um Date
+            timestamp = statusTime;
+          } else if (typeof statusTime === 'string') {
+            // Se for uma string ISO
+            timestamp = new Date(statusTime);
+          } else if (statusTime?.seconds) {
+            // Se for um objeto Firestore com seconds
+            timestamp = new Date(statusTime.seconds * 1000);
+          } else {
+            // Fallback para data atual
+            timestamp = new Date();
+          }
+          
+          timeline.push({
+            status: entry.key,
+            label: entry.label,
+            timestamp,
+            icon: entry.icon,
+            bgColor: entry.bgColor,
+          });
+        }
+      });
+    }
+    
+    // Ordenar a timeline por timestamp
+    timeline.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    
+    return timeline;
+  };
 
   return (
     <div className="space-y-6">
@@ -486,6 +686,7 @@ export default function AdminOrders() {
               <p className="mt-4 text-gray-600">Carregando pedidos...</p>
             </div>
           ) : (
+            <div className="space-y-4">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -577,58 +778,58 @@ export default function AdminOrders() {
                                   <Eye className="h-4 w-4 mr-2" /> Ver Detalhes
                                 </DropdownMenuItem>
 
-                                {/* payment_pending: cancelar */}
-                                {order.status === "payment_pending" && (
-                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, "cancelled")}> 
-                                    <XCircle className="h-4 w-4 mr-2" /> Cancelar Pedido
-                                  </DropdownMenuItem>
-                                )}
-
-                                {/* pending: aceitar (preparing) ou recusar (cancelled) */}
-                                {order.status === "pending" && (
-                                  <>
-                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "preparing")}> 
-                                      <CheckCircle className="h-4 w-4 mr-2" /> Aceitar Pedido
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "cancelled")}> 
-                                      <XCircle className="h-4 w-4 mr-2" /> Recusar Pedido
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-
-                                {/* preparing: em entrega, entregue, cancelar */}
-                                {order.status === "preparing" && (
-                                  <>
-                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "delivering")}> 
-                                      <Truck className="h-4 w-4 mr-2" /> Marcar como Em Entrega
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "delivered")}> 
-                                      <CheckCircle className="h-4 w-4 mr-2" /> Marcar como Entregue
-                                    </DropdownMenuItem>
+                                  {/* payment_pending: cancelar */}
+                                  {order.status === "payment_pending" && (
                                     <DropdownMenuItem onClick={() => handleStatusChange(order.id, "cancelled")}> 
                                       <XCircle className="h-4 w-4 mr-2" /> Cancelar Pedido
                                     </DropdownMenuItem>
-                                  </>
+                                  )}
+
+                                  {/* pending: aceitar (preparing) ou recusar (cancelled) */}
+                                  {order.status === "pending" && (
+                                    <>
+                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "preparing")}> 
+                                        <CheckCircle className="h-4 w-4 mr-2" /> Aceitar Pedido
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "cancelled")}> 
+                                        <XCircle className="h-4 w-4 mr-2" /> Recusar Pedido
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+
+                                  {/* preparing: em entrega, entregue, cancelar */}
+                                {order.status === "preparing" && (
+                                    <>
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, "delivering")}>
+                                    <Truck className="h-4 w-4 mr-2" /> Marcar como Em Entrega
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, "delivered")}>
+                                    <CheckCircle className="h-4 w-4 mr-2" /> Marcar como Entregue
+                                  </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "cancelled")}> 
+                                        <XCircle className="h-4 w-4 mr-2" /> Cancelar Pedido
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+
+                                  {/* delivering: entregue, cancelar por não entregue */}
+                                  {order.status === "delivering" && (
+                                    <>
+                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "delivered")}> 
+                                        <CheckCircle className="h-4 w-4 mr-2" /> Marcar como Entregue
+                                      </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, "cancelled")}>
+                                        <XCircle className="h-4 w-4 mr-2" /> Cancelar (Não Entregue)
+                                  </DropdownMenuItem>
+                                    </>
                                 )}
 
-                                {/* delivering: entregue, cancelar por não entregue */}
-                                {order.status === "delivering" && (
-                                  <>
-                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "delivered")}> 
-                                      <CheckCircle className="h-4 w-4 mr-2" /> Marcar como Entregue
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleStatusChange(order.id, "cancelled")}> 
-                                      <XCircle className="h-4 w-4 mr-2" /> Cancelar (Não Entregue)
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-
-                                {/* delivered/cancelled: apenas ações normais */}
-                                <DropdownMenuItem onClick={() => handlePrint(order)}>
+                                  {/* delivered/cancelled: apenas ações normais */}
+                                  <DropdownMenuItem onClick={() => handlePrint(order)}>
                                   <Printer className="h-4 w-4 mr-2" /> Imprimir
                                 </DropdownMenuItem>
 
-                                <DropdownMenuItem onClick={() => handleContact(order)}>
+                                  <DropdownMenuItem onClick={() => handleContact(order)}>
                                   <MessageSquare className="h-4 w-4 mr-2" /> Contatar Cliente
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
@@ -640,6 +841,27 @@ export default function AdminOrders() {
                   )}
                 </tbody>
               </table>
+              </div>
+              
+              {/* Botão para carregar mais */}
+              {hasMore && (
+                <div className="mt-4 text-center">
+                  <Button 
+                    variant="outline" 
+                    onClick={loadMore} 
+                    disabled={loadingMore || isLoading}
+                  >
+                    {loadingMore ? (
+                      <>
+                        <span className="animate-spin mr-2">◌</span>
+                        Carregando...
+                      </>
+                    ) : (
+                      'Carregar mais pedidos'
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -749,43 +971,95 @@ export default function AdminOrders() {
                 <div>
                   <h4 className="font-medium mb-2">Atualizar Status</h4>
                   <div className="grid grid-cols-2 gap-2">
-                    {selectedOrder.status === "preparing" && (
-                      <Button
-                        variant="outline"
-                        className="flex items-center gap-2"
-                        onClick={() => {
-                          handleStatusChange(selectedOrder.id, "delivering")
-                          setSelectedOrder({ ...selectedOrder, status: "delivering" })
-                        }}
-                      >
-                        <Truck className="h-4 w-4" /> Marcar como Em Entrega
-                      </Button>
-                    )}
-
-                    {(selectedOrder.status === "preparing" || selectedOrder.status === "delivering") && (
-                      <Button
-                        variant="outline"
-                        className="flex items-center gap-2"
-                        onClick={() => {
-                          handleStatusChange(selectedOrder.id, "delivered")
-                          setSelectedOrder({ ...selectedOrder, status: "delivered" })
-                        }}
-                      >
-                        <CheckCircle className="h-4 w-4" /> Marcar como Entregue
-                      </Button>
-                    )}
-
-                    {(selectedOrder.status === "preparing" || selectedOrder.status === "delivering") && (
+                    {selectedOrder.status === "payment_pending" && (
                       <Button
                         variant="outline"
                         className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
                         onClick={() => {
-                          handleStatusChange(selectedOrder.id, "cancelled")
-                          setSelectedOrder({ ...selectedOrder, status: "cancelled" })
+                          handleStatusChange(selectedOrder.id, "cancelled");
+                          // Não fechamos o modal, deixamos o usuário ver a atualização
                         }}
                       >
                         <XCircle className="h-4 w-4" /> Cancelar Pedido
                       </Button>
+                    )}
+
+                    {selectedOrder.status === "pending" && (
+                      <>
+                        <Button
+                          variant="outline"
+                          className="flex items-center gap-2"
+                          onClick={() => {
+                            handleStatusChange(selectedOrder.id, "preparing");
+                          }}
+                        >
+                          <CheckCircle className="h-4 w-4" /> Aceitar Pedido
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => {
+                            handleStatusChange(selectedOrder.id, "cancelled");
+                          }}
+                        >
+                          <XCircle className="h-4 w-4" /> Recusar Pedido
+                        </Button>
+                      </>
+                    )}
+
+                    {selectedOrder.status === "preparing" && (
+                      <>
+                        <Button
+                          variant="outline"
+                          className="flex items-center gap-2"
+                          onClick={() => {
+                            handleStatusChange(selectedOrder.id, "delivering");
+                          }}
+                        >
+                          <Truck className="h-4 w-4" /> Marcar como Em Entrega
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex items-center gap-2"
+                          onClick={() => {
+                            handleStatusChange(selectedOrder.id, "delivered");
+                          }}
+                        >
+                          <CheckCircle className="h-4 w-4" /> Marcar como Entregue
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => {
+                            handleStatusChange(selectedOrder.id, "cancelled");
+                          }}
+                        >
+                          <XCircle className="h-4 w-4" /> Cancelar Pedido
+                        </Button>
+                      </>
+                    )}
+
+                    {selectedOrder.status === "delivering" && (
+                      <>
+                        <Button
+                          variant="outline"
+                          className="flex items-center gap-2"
+                          onClick={() => {
+                            handleStatusChange(selectedOrder.id, "delivered");
+                          }}
+                        >
+                          <CheckCircle className="h-4 w-4" /> Marcar como Entregue
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => {
+                            handleStatusChange(selectedOrder.id, "cancelled");
+                          }}
+                        >
+                          <XCircle className="h-4 w-4" /> Cancelar (Não Entregue)
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -793,57 +1067,19 @@ export default function AdminOrders() {
                 <div>
                   <h4 className="font-medium mb-2">Linha do Tempo</h4>
                   <div className="space-y-3 mt-4">
-                    <div className="flex gap-3">
-                      <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
-                        <CheckCircle className="h-3 w-3 text-green-600" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium">Pedido recebido</div>
-                        <div className="text-xs text-neutral-500">28/11/2023 18:30</div>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <div className="w-6 h-6 rounded-full bg-yellow-100 flex items-center justify-center">
-                        <Clock className="h-3 w-3 text-yellow-600" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium">Em preparo</div>
-                        <div className="text-xs text-neutral-500">28/11/2023 18:35</div>
-                      </div>
-                    </div>
-                    {selectedOrder.status === "delivering" || selectedOrder.status === "delivered" ? (
-                      <div className="flex gap-3">
-                        <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-                          <Truck className="h-3 w-3 text-blue-600" />
+                    {selectedOrder && getStatusTimeline(selectedOrder).map((item, index) => (
+                      <div className="flex gap-3" key={`timeline-${index}`}>
+                        <div className={`w-6 h-6 rounded-full ${item.bgColor} flex items-center justify-center`}>
+                          {item.icon}
                         </div>
                         <div>
-                          <div className="text-sm font-medium">Em entrega</div>
-                          <div className="text-xs text-neutral-500">28/11/2023 19:05</div>
+                          <div className="text-sm font-medium">{item.label}</div>
+                          <div className="text-xs text-neutral-500">
+                            {format(item.timestamp, "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                          </div>
                         </div>
                       </div>
-                    ) : null}
-                    {selectedOrder.status === "delivered" ? (
-                      <div className="flex gap-3">
-                        <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
-                          <CheckCircle className="h-3 w-3 text-green-600" />
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium">Entregue</div>
-                          <div className="text-xs text-neutral-500">28/11/2023 19:25</div>
-                        </div>
-                      </div>
-                    ) : null}
-                    {selectedOrder.status === "cancelled" ? (
-                      <div className="flex gap-3">
-                        <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
-                          <XCircle className="h-3 w-3 text-red-600" />
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium">Cancelado</div>
-                          <div className="text-xs text-neutral-500">28/11/2023 19:10</div>
-                        </div>
-                      </div>
-                    ) : null}
+                    ))}
                   </div>
                 </div>
               </TabsContent>
@@ -853,7 +1089,7 @@ export default function AdminOrders() {
               <Button variant="outline" onClick={() => setOrderDetailsOpen(false)}>
                 Fechar
               </Button>
-              <Button onClick={() => setOrderDetailsOpen(false)}>Imprimir Pedido</Button>
+              <Button onClick={() => handlePrint(selectedOrder)}>Imprimir Pedido</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
