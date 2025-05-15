@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, ReactElement, JSXElementConstructor } from "react"
+import { useEffect, useState, useCallback, useMemo, ReactElement, JSXElementConstructor, Suspense, lazy } from "react"
 import {
   BarChart,
   Bar,
@@ -34,6 +34,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Slider } from "@/components/ui/slider"
+
+// Importar componentes otimizados
+import { LazyChart, TrendPrediction } from "./lazy-charts"
 
 // Status translations and colors
 const statusInfo: Record<string, { label: string; color: string }> = {
@@ -247,7 +250,7 @@ const fetchOrders = async (timeRange: string, startDate?: Date) => {
   }
 }
 
-// Processar dados para pedidos por mês
+// Processar dados para pedidos por mês usando useMemo no componente
 const processOrdersByMonth = (orders: any[]): OrderData[] => {
   const monthMap: Record<string, OrderData> = {}
   const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
@@ -588,27 +591,27 @@ export default function AdminDashboard() {
   const [productFilter, setProductFilter] = useState<string[]>([])
   const [timeFilter, setTimeFilter] = useState<[number, number]>([10, 22]) // Horas entre 10h e 22h
   const [minOrderValue, setMinOrderValue] = useState<number>(0)
-
-  // Estados para armazenar os dados
-  const [orderData, setOrderData] = useState<OrderData[]>([])
-  const [compareOrderData, setCompareOrderData] = useState<OrderData[]>([])
-  const [customerData, setCustomerData] = useState<CustomerData[]>([])
-  const [popularDishes, setPopularDishes] = useState<PopularDish[]>([])
-  const [ordersByTime, setOrdersByTime] = useState<OrderByTime[]>([])
-  const [ordersByLocation, setOrdersByLocation] = useState<OrderByLocation[]>([])
-  const [weeklyOrders, setWeeklyOrders] = useState<WeeklyOrder[]>([])
-  const [deliveryTimes, setDeliveryTimes] = useState<DeliveryTime[]>([])
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
   
+  // Estado para aba atual (para carregamento sob demanda)
+  const [activeTab, setActiveTab] = useState("orders")
+
   // Estados para armazenar produtos disponíveis para filtro
   const [availableProducts, setAvailableProducts] = useState<string[]>([])
+  
+  // Implementação de cache local para dados do Firestore
+  const [cachedOrders, setCachedOrders] = useState<Record<string, any[]>>({})
+  const [cacheTTL, setCacheTTL] = useState<Record<string, number>>({})
 
   // Estado para controlar se os dados foram carregados
   const [isLoading, setIsLoading] = useState(true)
 
-  // Novo estado para armazenar contagem de todos os pedidos por cliente
+  // Estado para armazenar contagem de todos os pedidos por cliente
   const [allCustomerOrderCounts, setAllCustomerOrderCounts] = useState<Record<string, number>>({})
-
+  
+  // Estados para armazenar os dados brutos
+  const [rawOrders, setRawOrders] = useState<any[]>([])
+  const [compareOrders, setCompareOrders] = useState<any[]>([])
+  
   // Estado para métricas calculadas
   const [metrics, setMetrics] = useState({
     totalOrders: 0,
@@ -619,7 +622,38 @@ export default function AdminDashboard() {
     revenueGrowth: "0.0",
     averageOrdersPerCustomer: 0
   })
-
+  
+  // Dados processados com useMemo para evitar reprocessamento desnecessário
+  const orderData = useMemo(() => processOrdersByMonth(rawOrders), [rawOrders])
+  const compareOrderData = useMemo(() => processOrdersByMonth(compareOrders), [compareOrders])
+  const customerData = useMemo(() => processCustomerData(rawOrders, allCustomerOrderCounts), [rawOrders, allCustomerOrderCounts])
+  const popularDishes = useMemo(() => processPopularDishes(rawOrders), [rawOrders])
+  const ordersByTime = useMemo(() => {
+    const processed = processOrdersByTime(rawOrders)
+    const compareProcessed = processOrdersByTime(compareOrders)
+    
+    // Combinar dados para comparação
+    return processed.map((item, index) => ({
+      ...item,
+      compareOrders: compareProcessed[index]?.orders || 0
+    }))
+  }, [rawOrders, compareOrders])
+  
+  const ordersByLocation = useMemo(() => processOrdersByLocation(rawOrders), [rawOrders])
+  const weeklyOrders = useMemo(() => {
+    const processed = processWeeklyOrders(rawOrders)
+    const compareProcessed = processWeeklyOrders(compareOrders)
+    
+    // Combinar dados para comparação
+    return processed.map((item, index) => ({
+      ...item,
+      compareOrders: compareProcessed[index]?.orders || 0
+    }))
+  }, [rawOrders, compareOrders])
+  
+  const deliveryTimes = useMemo(() => processDeliveryTimes(rawOrders), [rawOrders])
+  const recentOrders = useMemo(() => processRecentOrders(rawOrders), [rawOrders])
+  
   // Função para buscar e contar todos os pedidos por cliente
   const fetchAllCustomerOrders = async () => {
     try {
@@ -680,10 +714,38 @@ export default function AdminDashboard() {
     });
   };
 
-  // Função para carregar dados e realizar comparação automática
-  const loadData = async () => {
+  // Função auxiliar para resetar dados em caso de erro
+  const resetAllData = useCallback(() => {
+    setRawOrders([]);
+    setCompareOrders([]);
+    setMetrics({
+      totalOrders: 0,
+      totalRevenue: 0,
+      totalCustomers: 0,
+      averageOrderValue: "0.00",
+      orderGrowth: "0.0",
+      revenueGrowth: "0.0",
+      averageOrdersPerCustomer: 0
+    });
+  }, []);
+
+  // Função otimizada para carregar dados com cache
+  const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
+      
+      // Variáveis para cache
+      const cacheKey = `orders_${timeRange}`;
+      const cacheTimestamp = new Date().getTime();
+      const cacheExpiry = 5 * 60 * 1000; // 5 minutos
+      
+      // Verificar se há dados em cache válidos
+      if (cachedOrders[cacheKey] && cacheTTL[cacheKey] > cacheTimestamp) {
+        console.log("Usando dados em cache para", cacheKey);
+        setRawOrders(cachedOrders[cacheKey]);
+        setIsLoading(false);
+        return;
+      }
 
       // Carregar dados históricos de clientes apenas uma vez
       if (Object.keys(allCustomerOrderCounts).length === 0) {
@@ -691,7 +753,7 @@ export default function AdminDashboard() {
       }
       
       // Determinar datas para o período atual e de comparação
-      const now = new Date();
+      const currentDate = new Date();
       let currentStartDate = new Date();
       let compareStartDate = new Date();
       let compareEndDate = new Date();
@@ -700,32 +762,32 @@ export default function AdminDashboard() {
       switch (timeRange) {
         case "week":
           // Período atual: última semana
-          currentStartDate = subDays(now, 7);
+          currentStartDate = subDays(currentDate, 7);
           // Período de comparação: semana anterior
-          compareStartDate = subDays(now, 14);
-          compareEndDate = subDays(now, 7);
+          compareStartDate = subDays(currentDate, 14);
+          compareEndDate = subDays(currentDate, 7);
           break;
         case "month":
           // Período atual: último mês
-          currentStartDate = startOfMonth(now);
+          currentStartDate = startOfMonth(currentDate);
           // Período de comparação: mês anterior
-          compareStartDate = subMonths(now, 1);
+          compareStartDate = subMonths(currentDate, 1);
           compareStartDate = startOfMonth(compareStartDate);
           compareEndDate = endOfMonth(compareStartDate);
           break;
         case "quarter":
           // Período atual: último trimestre
-          currentStartDate = startOfQuarter(now);
+          currentStartDate = startOfQuarter(currentDate);
           // Período de comparação: trimestre anterior
-          compareStartDate = subMonths(now, 3);
+          compareStartDate = subMonths(currentDate, 3);
           compareStartDate = startOfQuarter(compareStartDate);
           compareEndDate = endOfQuarter(compareStartDate);
           break;
         case "year":
           // Período atual: último ano
-          currentStartDate = startOfYear(now);
+          currentStartDate = startOfYear(currentDate);
           // Período de comparação: ano anterior
-          compareStartDate = subYears(now, 1);
+          compareStartDate = subYears(currentDate, 1);
           compareStartDate = startOfYear(compareStartDate);
           compareEndDate = endOfYear(compareStartDate);
           break;
@@ -755,139 +817,120 @@ export default function AdminDashboard() {
       const filteredCurrentOrders = showAdvancedFilters 
         ? applyAdvancedFilters(currentOrders) 
         : currentOrders;
-      
-      // Processar dados do período atual
-      const currentProcessedData = {
-        ordersByMonth: processOrdersByMonth(filteredCurrentOrders),
-        customers: processCustomerData(filteredCurrentOrders, allCustomerOrderCounts),
-        popularDishes: processPopularDishes(filteredCurrentOrders),
-        ordersByTime: processOrdersByTime(filteredCurrentOrders),
-        ordersByLocation: processOrdersByLocation(filteredCurrentOrders),
-        weeklyOrders: processWeeklyOrders(filteredCurrentOrders),
-        deliveryTimes: processDeliveryTimes(filteredCurrentOrders),
-        recentOrders: processRecentOrders(filteredCurrentOrders),
         
-        totalOrders: filteredCurrentOrders.length,
-        totalRevenue: filteredCurrentOrders.reduce((sum, order) => 
-          sum + Number(order.payment?.total || 0), 0)
-      };
-      
-      // Processar dados do período de comparação
-      const comparisonProcessedData = {
-        ordersByMonth: processOrdersByMonth(comparisonOrders),
-        ordersByTime: processOrdersByTime(comparisonOrders),
-        weeklyOrders: processWeeklyOrders(comparisonOrders),
+      // Calcular métricas diretamente para exibição
+      const totalOrders = filteredCurrentOrders.length;
+      const totalRevenue = filteredCurrentOrders.reduce((sum, order) => 
+        sum + Number(order.payment?.total || 0), 0);
         
-        totalOrders: comparisonOrders.length,
-        totalRevenue: comparisonOrders.reduce((sum, order) => 
-          sum + Number(order.payment?.total || 0), 0)
-      };
-      
+      const compareTotalOrders = comparisonOrders.length;
+      const compareTotalRevenue = comparisonOrders.reduce((sum, order) => 
+        sum + Number(order.payment?.total || 0), 0);
+        
       // Calcular crescimento com base nos períodos
-      const orderGrowth = calculateGrowth(
-        currentProcessedData.totalOrders, 
-        comparisonProcessedData.totalOrders
-      );
-      
-      const revenueGrowth = calculateGrowth(
-        currentProcessedData.totalRevenue, 
-        comparisonProcessedData.totalRevenue
-      );
-      
-      // Combinar dados para gráficos com comparação
-      // Para gráfico semanal
-      const combinedWeeklyData = currentProcessedData.weeklyOrders.map((item, index) => {
-        const compareItem = comparisonProcessedData.weeklyOrders[index];
-        return {
-          ...item,
-          compareOrders: compareItem ? compareItem.orders : 0
-        };
-      });
-      
-      // Para gráfico de horários
-      const combinedTimeData = currentProcessedData.ordersByTime.map((item, index) => {
-        const compareItem = comparisonProcessedData.ordersByTime[index];
-        return {
-          ...item,
-          compareOrders: compareItem ? compareItem.orders : 0
-        };
-      });
-      
-      // Atualizar todos os estados
-      setOrderData(currentProcessedData.ordersByMonth);
-      setCompareOrderData(comparisonProcessedData.ordersByMonth);
-      setCustomerData(currentProcessedData.customers);
-      setPopularDishes(currentProcessedData.popularDishes);
-      setOrdersByTime(combinedTimeData); // Já combinado com comparação
-      setOrdersByLocation(currentProcessedData.ordersByLocation);
-      setWeeklyOrders(combinedWeeklyData); // Já combinado com comparação
-      setDeliveryTimes(currentProcessedData.deliveryTimes);
-      setRecentOrders(currentProcessedData.recentOrders);
-      
+      const orderGrowth = calculateGrowth(totalOrders, compareTotalOrders);
+      const revenueGrowth = calculateGrowth(totalRevenue, compareTotalRevenue);
+        
+      // Processar os dados do cliente para as métricas
+      const customerDataProcessed = processCustomerData(filteredCurrentOrders, allCustomerOrderCounts);
+      const totalCustomers = customerDataProcessed.reduce((sum, item) => sum + item.value, 0);
+        
       // Calcular a média de pedidos por cliente
       let averageOrdersPerCustomer = 0;
       if (Object.keys(allCustomerOrderCounts).length > 0) {
-        const totalCustomers = Object.keys(allCustomerOrderCounts).length;
+        const totalCustomerCount = Object.keys(allCustomerOrderCounts).length;
         const totalOrdersCount = Object.values(allCustomerOrderCounts).reduce((sum, count) => sum + count, 0);
-        averageOrdersPerCustomer = totalOrdersCount / totalCustomers;
+        averageOrdersPerCustomer = totalOrdersCount / totalCustomerCount;
       }
-
-      // Atualizar métricas com crescimento calculado
+        
+      // Atualizar métricas calculadas
       setMetrics({
-        totalOrders: currentProcessedData.totalOrders,
-        totalRevenue: currentProcessedData.totalRevenue,
-        totalCustomers: currentProcessedData.customers.reduce((sum, item) => sum + item.value, 0),
-        averageOrderValue: currentProcessedData.totalOrders > 0 
-          ? (currentProcessedData.totalRevenue / currentProcessedData.totalOrders).toFixed(2) 
+        totalOrders,
+        totalRevenue,
+        totalCustomers,
+        averageOrderValue: totalOrders > 0 
+          ? (totalRevenue / totalOrders).toFixed(2) 
           : "0.00",
         orderGrowth,
         revenueGrowth,
         averageOrdersPerCustomer
       });
-      
+        
+      // Atualizar estados com dados brutos - os useMemo cuidarão do processamento
+      setRawOrders(filteredCurrentOrders);
+      setCompareOrders(comparisonOrders);
+        
+      // Atualizar cache
+      setCachedOrders({
+        ...cachedOrders,
+        [cacheKey]: filteredCurrentOrders
+      });
+      setCacheTTL({
+        ...cacheTTL,
+        [cacheKey]: cacheTimestamp + cacheExpiry
+      });
+        
       setIsLoading(false);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
       resetAllData();
       setIsLoading(false);
     }
-  };
+  }, [timeRange, showAdvancedFilters, productFilter, timeFilter, minOrderValue, allCustomerOrderCounts, 
+      cachedOrders, cacheTTL, applyAdvancedFilters, fetchAllCustomerOrders, resetAllData]);
 
-  // Função auxiliar para resetar dados em caso de erro
-  const resetAllData = () => {
-    setOrderData([]);
-    setCompareOrderData([]);
-    setCustomerData([]);
-    setPopularDishes([]);
-    setOrdersByTime([]);
-    setOrdersByLocation([]);
-    setWeeklyOrders([]);
-    setDeliveryTimes([]);
-    setRecentOrders([]);
-    setMetrics({
-      totalOrders: 0,
-      totalRevenue: 0,
-      totalCustomers: 0,
-      averageOrderValue: "0.00",
-      orderGrowth: "0.0",
-      revenueGrowth: "0.0",
-      averageOrdersPerCustomer: 0
-    });
-  };
-
-  // Efeito para carregar dados
+  // Efeito para carregar dados principais
   useEffect(() => {
     loadData();
-  }, [timeRange, showAdvancedFilters, productFilter, timeFilter, minOrderValue]); // Simplificar dependências
+  }, [timeRange, showAdvancedFilters, productFilter, timeFilter, minOrderValue, loadData]);
   
-  // Função atualizada para renderizar gráficos
-  const renderChart = (chartType: string, data: any[], renderFn: () => ReactElement<any, string | JSXElementConstructor<any>>): ReactElement<any, string | JSXElementConstructor<any>> => {
+  // Efeito para carregar dados específicos da aba selecionada
+  useEffect(() => {
+    // Evitar carregamentos desnecessários se os dados já foram carregados
+    if (rawOrders.length === 0) return;
+    
+    const loadTabSpecificData = async () => {
+      // Para cada aba, podemos otimizar carregando apenas os dados necessários
+      switch (activeTab) {
+        case "products":
+          console.log("Carregando dados específicos de produtos");
+          // Poderíamos fazer uma consulta específica para produtos aqui
+          break;
+          
+        case "locations":
+          console.log("Carregando dados específicos de localização");
+          // Poderíamos carregar dados geográficos adicionais aqui
+          break;
+          
+        case "customers":
+          console.log("Carregando dados específicos de clientes");
+          // Carregar informações detalhadas sobre clientes
+          if (Object.keys(allCustomerOrderCounts).length === 0) {
+            await fetchAllCustomerOrders();
+          }
+          break;
+          
+        default:
+          // Para a aba de pedidos, os dados principais já são suficientes
+          break;
+      }
+    };
+    
+    loadTabSpecificData();
+  }, [activeTab, rawOrders.length, allCustomerOrderCounts, fetchAllCustomerOrders]);
+
+  // Função otimizada para renderizar gráficos com useCallback
+  const renderChart = useCallback((
+    chartType: string, 
+    data: any[], 
+    renderFn: () => ReactElement
+  ): ReactElement => {
     if (isLoading) {
       return (
         <div className="flex h-full items-center justify-center">
           <p className="text-neutral-500">Carregando dados...</p>
         </div>
-      ) as ReactElement<any, string | JSXElementConstructor<any>>;
+      );
     }
 
     if (!data || data.length === 0) {
@@ -895,7 +938,7 @@ export default function AdminDashboard() {
         <div className="flex h-full items-center justify-center">
           <p className="text-neutral-500">Nenhum dado disponível</p>
         </div>
-      ) as ReactElement<any, string | JSXElementConstructor<any>>;
+      );
     }
 
     // Verificar se os dados têm valores significativos
@@ -911,7 +954,7 @@ export default function AdminDashboard() {
         <div className="flex h-full items-center justify-center">
           <p className="text-neutral-500">Dados insuficientes para visualização</p>
         </div>
-      ) as ReactElement<any, string | JSXElementConstructor<any>>;
+      );
     }
 
     // Verificar se os dados possuem campos de comparação
@@ -919,12 +962,8 @@ export default function AdminDashboard() {
       return typeof item.compareOrders === 'number' && item.compareOrders > 0;
     });
 
-    if (!hasComparisonData && chartType !== 'line') {
-      console.log(`Sem dados de comparação significativos para ${chartType}`);
-    }
-
     return renderFn();
-  };
+  }, [isLoading]);
 
   return (
     <div className="space-y-6">
@@ -1178,7 +1217,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Gráficos */}
-      <Tabs defaultValue="orders" className="w-full">
+      <Tabs defaultValue="orders" className="w-full" onValueChange={(value) => setActiveTab(value)}>
         <TabsList className="grid grid-cols-4 mb-6 h-auto">
           <TabsTrigger value="orders" className="text-xs md:text-sm py-2 px-1 md:py-3 md:px-4">
             Pedidos
@@ -1195,7 +1234,7 @@ export default function AdminDashboard() {
         </TabsList>
 
         {/* Conteúdo da aba Pedidos */}
-        <TabsContent value="orders">
+        <TabsContent value="orders" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Gráfico de Pedidos por Mês */}
             <Card>
@@ -1379,6 +1418,8 @@ export default function AdminDashboard() {
                 {/* Área de informações secundárias removida */}
               </CardContent>
             </Card>
+
+
           </div>
         </TabsContent>
 
@@ -1519,36 +1560,32 @@ export default function AdminDashboard() {
                 <CardDescription>Pedidos por região</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[300px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    {renderChart("pie", ordersByLocation, () => (
-                      <PieChart>
-                        <Pie
-                          data={ordersByLocation}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="value"
-                          nameKey="name"
-                        >
-                          {ordersByLocation.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value, name, props) => [
-                            `${typeof value === 'number' ? ((value / ordersByLocation.reduce((sum, item) => sum + (item.value || 0), 0)) * 100).toFixed(0) : 0}%`,
-                            name,
-                          ]}
-                        />
-                        <Legend />
-                      </PieChart>
-                    ))}
-                  </ResponsiveContainer>
-                </div>
+                <Suspense fallback={<div className="flex h-[300px] items-center justify-center"><p>Carregando mapa...</p></div>}>
+                  <LazyChart type="pie" data={ordersByLocation}>
+                    <Pie
+                      data={ordersByLocation}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                      nameKey="name"
+                    >
+                      {ordersByLocation.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value, name, props) => [
+                        `${typeof value === 'number' ? ((value / ordersByLocation.reduce((sum, item) => sum + (item.value || 0), 0)) * 100).toFixed(0) : 0}%`,
+                        name,
+                      ]}
+                    />
+                    <Legend />
+                  </LazyChart>
+                </Suspense>
               </CardContent>
             </Card>
 
