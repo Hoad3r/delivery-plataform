@@ -292,31 +292,50 @@ const processOrdersByTime = (orders: any[]): OrderByTime[] => {
 
 // Processar dados para pedidos por localização
 const processOrdersByLocation = (orders: any[]): OrderByLocation[] => {
-  // Como não temos dados de localização específicos, vamos usar bairros ou CEPs
-  // Este é apenas um exemplo, ajuste conforme seus dados reais
-  const locationCounts: Record<string, number> = {
-    "Centro": 0,
-    "Zona Sul": 0,
-    "Zona Norte": 0,
-    "Zona Leste": 0,
-    "Zona Oeste": 0
-  }
+  // Objeto para armazenar contagem por bairro
+  const bairroCounts: Record<string, number> = {}
   
-  // Se você tiver um campo específico para região/bairro, use-o aqui
   orders.forEach(order => {
     if (!order.delivery?.address) return
     
-    const address = order.delivery.address.toLowerCase()
+    // Tenta extrair o bairro do endereço de forma mais inteligente
+    const parts = order.delivery.address.split(',').map(part => part.trim());
+    let bairro = 'Outros'; // Valor padrão
     
-    if (address.includes("centro")) locationCounts["Centro"]++
-    else if (address.includes("zona sul") || address.includes("sul")) locationCounts["Zona Sul"]++
-    else if (address.includes("zona norte") || address.includes("norte")) locationCounts["Zona Norte"]++
-    else if (address.includes("zona leste") || address.includes("leste")) locationCounts["Zona Leste"]++
-    else if (address.includes("zona oeste") || address.includes("oeste")) locationCounts["Zona Oeste"]++
-    else locationCounts["Centro"]++ // Padrão se não encontrar região específica
+    // Percorre as partes do endereço procurando por um bairro válido
+    // Ignora partes que contêm informações de apartamento ou números
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      
+      // Ignora se for apartamento, bloco, número, etc.
+      if (part.toLowerCase().includes('apto') || 
+          part.toLowerCase().includes('apartamento') ||
+          part.toLowerCase().includes('bloco') ||
+          part.toLowerCase().includes('andar') ||
+          /^\d+$/.test(part) || // Apenas números
+          part.length < 3) { // Muito curto para ser um bairro
+        continue;
+      }
+      
+      // Provavelmente é um bairro se não for o primeiro ou segundo elemento
+      // (geralmente o primeiro é a rua, o segundo é o número)
+      if (i >= 2) {
+        bairro = part;
+        break; // Usa o primeiro candidato a bairro encontrado
+      }
+    }
+    
+    // Incrementa a contagem para este bairro
+    bairroCounts[bairro] = (bairroCounts[bairro] || 0) + 1;
   })
   
-  return Object.entries(locationCounts).map(([name, value]) => ({ name, value }))
+  // Converter para o formato necessário para o gráfico
+  // E ordenar por número de pedidos (decrescente)
+  return Object.entries(bairroCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+    // Limitando para os 5 principais bairros para melhor visualização
+    .slice(0, 5);
 }
 
 // Processar dados para pedidos por dia da semana
@@ -336,30 +355,104 @@ const processWeeklyOrders = (orders: any[]): WeeklyOrder[] => {
 
 // Processar dados para tempos de entrega baseado nas regiões
 const processDeliveryTimes = (orders: any[]): DeliveryTime[] => {
-  // Esta é uma aproximação baseada nos dados reais
-  // Em um cenário real, você teria timestamps de criação e entrega para calcular o tempo real
+  // Objeto para armazenar tempos por bairro
+  const bairroTimes: Record<string, {total: number, count: number}> = {}
   
-  // Mapeamento de regiões e seus tempos médios
-  const regionTimes: Record<string, { total: number, count: number }> = {
-    "Centro": { total: 0, count: 0 },
-    "Zona Sul": { total: 0, count: 0 },
-    "Zona Norte": { total: 0, count: 0 },
-    "Zona Leste": { total: 0, count: 0 },
-    "Zona Oeste": { total: 0, count: 0 }
+  orders.forEach(order => {
+    if (!order.delivery?.address || !order.statusHistory) return
+    
+    // Extrair bairro com a mesma lógica melhorada
+    const parts = order.delivery.address.split(',').map(part => part.trim());
+    let bairro = 'Outros'; // Valor padrão
+    
+    // Percorre as partes do endereço procurando por um bairro válido
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      
+      // Ignora se for apartamento, bloco, número, etc.
+      if (part.toLowerCase().includes('apto') || 
+          part.toLowerCase().includes('apartamento') ||
+          part.toLowerCase().includes('bloco') ||
+          part.toLowerCase().includes('andar') ||
+          /^\d+$/.test(part) ||
+          part.length < 3) {
+        continue;
+      }
+      
+      // Provavelmente é um bairro se não for o primeiro ou segundo elemento
+      if (i >= 2) {
+        bairro = part;
+        break;
+      }
+    }
+    
+    // Verificar se temos timestamps de preparing e delivered
+    const preparingTime = order.statusHistory.preparing;
+    const deliveredTime = order.statusHistory.delivered;
+    
+    if (preparingTime && deliveredTime) {
+      // Converter para Date se necessário
+      let startTime, endTime;
+      
+      // Tratar preparing time
+      if (preparingTime?.toDate) {
+        startTime = preparingTime.toDate();
+      } else if (preparingTime instanceof Date) {
+        startTime = preparingTime;
+      } else if (typeof preparingTime === 'string') {
+        startTime = new Date(preparingTime);
+      } else if (preparingTime?.seconds) {
+        startTime = new Date(preparingTime.seconds * 1000);
+      } else {
+        return; // Pula se não conseguir determinar a hora de início
+      }
+      
+      // Tratar delivered time
+      if (deliveredTime?.toDate) {
+        endTime = deliveredTime.toDate();
+      } else if (deliveredTime instanceof Date) {
+        endTime = deliveredTime;
+      } else if (typeof deliveredTime === 'string') {
+        endTime = new Date(deliveredTime);
+      } else if (deliveredTime?.seconds) {
+        endTime = new Date(deliveredTime.seconds * 1000);
+      } else {
+        return; // Pula se não conseguir determinar a hora de fim
+      }
+      
+      // Calcular diferença em minutos
+      const diffMinutes = Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60));
+      
+      // Filtrar tempos negativos ou absurdos (mais de 3 horas)
+      if (diffMinutes <= 0 || diffMinutes > 180) return;
+      
+      // Adicionar ao objeto de tempos
+      if (!bairroTimes[bairro]) {
+        bairroTimes[bairro] = {total: 0, count: 0};
+      }
+      bairroTimes[bairro].total += diffMinutes;
+      bairroTimes[bairro].count += 1;
+    }
+  });
+  
+  // Calcular médias e converter para formato do gráfico
+  const result = Object.entries(bairroTimes)
+    .map(([region, data]) => ({
+      region,
+      time: data.count > 0 ? Math.round(data.total / data.count) : 0
+    }))
+    .filter(item => item.time > 0) // Remover bairros sem dados de tempo
+    .sort((a, b) => b.time - a.time); // Ordenar por tempo (maior para menor)
+  
+  // Se não houver dados reais suficientes, retornar dados fictícios
+  if (result.length < 2) {
+    console.log("Dados de entrega insuficientes, usando valores padrão");
+    return [
+      { region: "Média geral", time: 30 }
+    ];
   }
   
-  // Valores padrão para cada região
-  const defaultTimes: Record<string, number> = {
-    "Centro": 25,
-    "Zona Sul": 35,
-    "Zona Norte": 40,
-    "Zona Leste": 45,
-    "Zona Oeste": 38
-  }
-  
-  // Se você tiver dados reais de tempo de entrega, use-os aqui
-  // Por enquanto, usando valores padrão
-  return Object.entries(defaultTimes).map(([region, time]) => ({ region, time }))
+  return result.slice(0, 5); // Limitar a 5 regiões para melhor visualização
 }
 
 // Processar dados para pedidos recentes
