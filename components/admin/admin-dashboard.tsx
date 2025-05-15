@@ -16,14 +16,24 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts"
-import { DollarSign, ShoppingBag, Users, TrendingUp, ArrowUp, ArrowDown, Filter } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { DollarSign, ShoppingBag, Users, TrendingUp, ArrowUp, ArrowDown, Filter, Download, Coffee, Clock } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { format, startOfWeek, startOfMonth, startOfQuarter, startOfYear, subDays } from "date-fns"
+import { format, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfMonth, endOfQuarter, endOfYear, subDays, subMonths, subYears } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { collection, query, where, getDocs, orderBy, Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { Button } from "@/components/ui/button"
+import { 
+  Popover, 
+  PopoverContent,
+  PopoverTrigger
+} from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Slider } from "@/components/ui/slider"
 
 // Status translations and colors
 const statusInfo: Record<string, { label: string; color: string }> = {
@@ -158,26 +168,26 @@ const extractDistrictFromAddress = (address: string): string => {
 }
 
 // Função para buscar pedidos do Firestore, filtrando por período
-const fetchOrders = async (timeRange: string) => {
+const fetchOrders = async (timeRange: string, startDate?: Date) => {
   // Definir a data de início baseada no período selecionado
-  let startDate = new Date()
+  let startDateValue = new Date()
   const now = new Date()
   
   switch (timeRange) {
     case "week":
-      startDate = subDays(now, 7)
+      startDateValue = subDays(now, 7)
       break
     case "month":
-      startDate = startOfMonth(now)
+      startDateValue = startOfMonth(now)
       break
     case "quarter":
-      startDate = startOfQuarter(now)
+      startDateValue = startOfQuarter(now)
       break
     case "year":
-      startDate = startOfYear(now)
+      startDateValue = startOfYear(now)
       break
     default:
-      startDate = startOfYear(now) // padrão para ano
+      startDateValue = startOfYear(now) // padrão para ano
   }
 
   try {
@@ -227,7 +237,7 @@ const fetchOrders = async (timeRange: string) => {
       ? completedOrders 
       : completedOrders.filter(order => {
           if (!order.createdAt) return false
-          return order.createdAt >= startDate
+          return order.createdAt >= startDateValue
         })
 
     return filtered
@@ -467,12 +477,121 @@ const processRecentOrders = (orders: any[]): RecentOrder[] => {
   return processedOrders;
 }
 
+// Função para exportar dados para Excel (melhorada)
+const exportToExcel = (data: any[], filename: string) => {
+  if (!data || data.length === 0) return;
+  
+  // Adicionar cabeçalhos específicos para Excel (BOM para suporte a UTF-8)
+  const BOM = "\uFEFF";
+  
+  // Converter dados para formato CSV com formatação melhorada
+  const headers = Object.keys(data[0]).join(';');
+  const rows = data.map(item => {
+    return Object.values(item).map(value => {
+      // Formatar números com casas decimais quando necessário
+      if (typeof value === 'number') {
+        // Para valores monetários (verifica se alguma chave de valor tem 'total', 'valor', etc)
+        if (Object.keys(item).some(key => 
+          key.toLowerCase().includes('total') || 
+          key.toLowerCase().includes('valor') || 
+          key.toLowerCase().includes('revenue'))) {
+          return `"${value.toFixed(2)}"`.replace('.', ',');
+        }
+        return `"${value}"`;
+      }
+      // Colocar textos entre aspas para evitar problemas com delimitadores
+      return `"${value}"`;
+    }).join(';');
+  });
+  
+  const csv = BOM + [headers, ...rows].join('\n');
+  
+  // Criar blob e link para download
+  // Usar tipo específico para Excel reconhecer automaticamente
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  
+  // Nome do arquivo com data formatada
+  const formattedDate = format(new Date(), 'dd-MM-yyyy');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `${filename}_${formattedDate}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+// Componente para botão de exportação reutilizável
+type ExportButtonProps = {
+  data: any[];
+  filename: string;
+  label?: string;
+  className?: string;
+}
+
+const ExportButton = ({ data, filename, label, className }: ExportButtonProps) => (
+  <Button 
+    variant="outline" 
+    size="sm"
+    className={className || "gap-1"}
+    onClick={() => exportToExcel(data, filename)}
+    title="Exportar para Excel"
+  >
+    <Download className="h-4 w-4" />
+    {label && <span>{label}</span>}
+  </Button>
+);
+
+// Adicione essa função antes do useEffect que carrega os dados
+const combineDataForComparison = (currentData: any[], compareData: any[], keyField: string) => {
+  if (!currentData || !compareData || currentData.length === 0) {
+    return currentData;
+  }
+  
+  // Criar um mapa dos dados de comparação para facilitar o acesso
+  const compareMap = new Map();
+  compareData.forEach(item => {
+    if (item[keyField]) {
+      compareMap.set(item[keyField], item);
+    }
+  });
+  
+  // Combinar dados atuais com dados de comparação
+  return currentData.map(current => {
+    const key = current[keyField];
+    const compare = compareMap.get(key);
+    
+    return {
+      ...current,
+      compareOrders: compare?.orders || 0,
+      compareRevenue: compare?.revenue || 0,
+      compareTime: compare?.time || 0,
+      compareValue: compare?.value || 0
+    };
+  });
+};
+
+// Função para calcular crescimento entre períodos
+const calculateGrowth = (current: number, previous: number) => {
+  if (previous === 0) return "0.0";
+  return (((current - previous) / previous) * 100).toFixed(1);
+};
+
 export default function AdminDashboard() {
   // Estado para armazenar o período selecionado
   const [timeRange, setTimeRange] = useState("month")
+  
+  // Estado para filtros avançados
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const [productFilter, setProductFilter] = useState<string[]>([])
+  const [timeFilter, setTimeFilter] = useState<[number, number]>([10, 22]) // Horas entre 10h e 22h
+  const [minOrderValue, setMinOrderValue] = useState<number>(0)
 
-  // Estados para armazenar os dados (substitua os dados mockados pelos dados reais da API)
+  // Estados para armazenar os dados
   const [orderData, setOrderData] = useState<OrderData[]>([])
+  const [compareOrderData, setCompareOrderData] = useState<OrderData[]>([])
   const [customerData, setCustomerData] = useState<CustomerData[]>([])
   const [popularDishes, setPopularDishes] = useState<PopularDish[]>([])
   const [ordersByTime, setOrdersByTime] = useState<OrderByTime[]>([])
@@ -480,131 +599,288 @@ export default function AdminDashboard() {
   const [weeklyOrders, setWeeklyOrders] = useState<WeeklyOrder[]>([])
   const [deliveryTimes, setDeliveryTimes] = useState<DeliveryTime[]>([])
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
-  // Novo estado para a média de pedidos por cliente
-  const [averageOrdersPerCustomer, setAverageOrdersPerCustomer] = useState(0)
+  
+  // Estados para armazenar produtos disponíveis para filtro
+  const [availableProducts, setAvailableProducts] = useState<string[]>([])
 
   // Estado para controlar se os dados foram carregados
   const [isLoading, setIsLoading] = useState(true)
 
-  // Novo estado para armazenar contagem de todos os pedidos por cliente (independente do período)
+  // Novo estado para armazenar contagem de todos os pedidos por cliente
   const [allCustomerOrderCounts, setAllCustomerOrderCounts] = useState<Record<string, number>>({})
 
-  // Efeito para carregar os dados quando o componente montar ou timeRange mudar
-  useEffect(() => {
-    // Adicionar função para buscar e contar todos os pedidos por cliente
-    const fetchAllCustomerOrders = async () => {
-      try {
-        const ordersRef = collection(db, "orders");
-        const q = query(ordersRef);
+  // Estado para métricas calculadas
+  const [metrics, setMetrics] = useState({
+    totalOrders: 0,
+    totalRevenue: 0,
+    totalCustomers: 0,
+    averageOrderValue: "0.00",
+    orderGrowth: "0.0",
+    revenueGrowth: "0.0",
+    averageOrdersPerCustomer: 0
+  })
+
+  // Função para buscar e contar todos os pedidos por cliente
+  const fetchAllCustomerOrders = async () => {
+    try {
+      const ordersRef = collection(db, "orders");
+      // O Firestore não suporta operador != em múltiplos campos, então voltamos para filtrar no cliente
+      const q = query(ordersRef);
+      
+      const snapshot = await getDocs(q);
+      const customerCounts: Record<string, number> = {};
+      const productList = new Set<string>();
+      
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const userId = data.userId || '';
         
-        const snapshot = await getDocs(q);
-        const customerCounts: Record<string, number> = {};
-        
-        snapshot.docs.forEach(doc => {
-          const data = doc.data();
-          const userId = data.userId || '';
-          
-          // Normalizar status para garantir consistência
-          let status = data.status || 'pending';
-          if (status === 'processing') status = 'preparing';
-          if (status === 'canceled') status = 'cancelled';
-          
-          // Considerar apenas pedidos que não foram cancelados
-          if (status !== 'cancelled' && userId) {
-            customerCounts[userId] = (customerCounts[userId] || 0) + 1;
-          }
-        });
-        
-        setAllCustomerOrderCounts(customerCounts);
-        
-        // Calcular a média de pedidos por cliente
-        if (Object.keys(customerCounts).length > 0) {
-          const totalCustomers = Object.keys(customerCounts).length;
-          const totalOrders = Object.values(customerCounts).reduce((sum, count) => sum + count, 0);
-          const avgOrdersPerCustomer = totalOrders / totalCustomers;
-          setAverageOrdersPerCustomer(avgOrdersPerCustomer);
+        // Extrair produtos para filtros
+        if (data.items && Array.isArray(data.items)) {
+          data.items.forEach((item: any) => {
+            if (item.name) productList.add(item.name);
+          });
         }
-      } catch (error) {
-        console.error("Erro ao carregar dados históricos de clientes:", error);
-      }
-    };
-
-    const loadData = async () => {
-      try {
-        setIsLoading(true)
-
-        // Carregar dados históricos de clientes (independente do filtro de período)
-        await fetchAllCustomerOrders();
         
-        // Buscar dados reais do Firestore
-        const orders = await fetchOrders(timeRange)
-        console.log("Pedidos carregados:", orders.length)
+  
         
-        // Sempre processar os dados, mesmo que orders esteja vazio
-        const ordersByMonth = processOrdersByMonth(orders)
-        
-        // Usar a nova função que considera histórico completo
-        const customers = processCustomerData(orders, allCustomerOrderCounts)
-        
-        const dishes = processPopularDishes(orders)
-        const orderTimes = processOrdersByTime(orders)
-        const locationData = processOrdersByLocation(orders)
-        const weekData = processWeeklyOrders(orders)
-        const deliveryTimeData = processDeliveryTimes(orders)
-        const recentOrdersData = processRecentOrders(orders)
-        
-        // Atualizar os estados com os dados processados
-        setOrderData(ordersByMonth)
-        setCustomerData(customers)
-        setPopularDishes(dishes)
-        setOrdersByTime(orderTimes)
-        setOrdersByLocation(locationData)
-        setWeeklyOrders(weekData)
-        setDeliveryTimes(deliveryTimeData)
-        setRecentOrders(recentOrdersData)
-
-          setIsLoading(false)
-      } catch (error) {
-        console.error("Erro ao carregar dados:", error)
-        
-        // Em caso de erro, definir arrays vazios
-        setOrderData([])
-        setCustomerData([])
-        setPopularDishes([])
-        setOrdersByTime([])
-        setOrdersByLocation([])
-        setWeeklyOrders([])
-        setDeliveryTimes([])
-        setRecentOrders([])
-        
-        setIsLoading(false)
-      }
+        // Considerar apenas pedidos que não foram cancelados
+        if (status !== 'cancelled' && userId) {
+          customerCounts[userId] = (customerCounts[userId] || 0) + 1;
+        }
+      });
+      
+      setAllCustomerOrderCounts(customerCounts);
+      setAvailableProducts(Array.from(productList));
+      
+    } catch (error) {
+      console.error("Erro ao carregar dados históricos de clientes:", error);
     }
+  };
 
-    loadData()
-  }, [timeRange]) // Recarregar quando o período mudar
+  // Função modificada para aplicar filtros avançados
+  const applyAdvancedFilters = (orders: any[]) => {
+    return orders.filter(order => {
+      // Filtrar por produtos
+      if (productFilter.length > 0) {
+        const hasSelectedProduct = order.items?.some((item: any) => 
+          productFilter.includes(item.name)
+        );
+        if (!hasSelectedProduct) return false;
+      }
+      
+      // Filtrar por horário
+      const orderHour = order.createdAt.getHours();
+      if (orderHour < timeFilter[0] || orderHour > timeFilter[1]) return false;
+      
+      // Filtrar por valor mínimo
+      if (order.payment?.total < minOrderValue) return false;
+      
+      return true;
+    });
+  };
 
-  // Calcular métricas de resumo
-  const totalOrders = orderData.reduce((sum, item) => sum + item.orders, 0)
-  const totalRevenue = orderData.reduce((sum, item) => sum + item.revenue, 0)
-  const totalCustomers = customerData.reduce((sum, item) => sum + item.value, 0)
-  const averageOrderValue = totalOrders > 0 ? (totalRevenue / totalOrders).toFixed(2) : "0.00"
+  // Função para carregar dados e realizar comparação automática
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
 
-  // Calcular crescimento mês a mês
-  const calculateGrowth = (current: number, previous: number) => {
-    if (previous === 0) return "0.0"
-    return (((current - previous) / previous) * 100).toFixed(1)
-  }
+      // Carregar dados históricos de clientes apenas uma vez
+      if (Object.keys(allCustomerOrderCounts).length === 0) {
+        await fetchAllCustomerOrders();
+      }
+      
+      // Determinar datas para o período atual e de comparação
+      const now = new Date();
+      let currentStartDate = new Date();
+      let compareStartDate = new Date();
+      let compareEndDate = new Date();
+      
+      // Configurar datas com base no período selecionado
+      switch (timeRange) {
+        case "week":
+          // Período atual: última semana
+          currentStartDate = subDays(now, 7);
+          // Período de comparação: semana anterior
+          compareStartDate = subDays(now, 14);
+          compareEndDate = subDays(now, 7);
+          break;
+        case "month":
+          // Período atual: último mês
+          currentStartDate = startOfMonth(now);
+          // Período de comparação: mês anterior
+          compareStartDate = subMonths(now, 1);
+          compareStartDate = startOfMonth(compareStartDate);
+          compareEndDate = endOfMonth(compareStartDate);
+          break;
+        case "quarter":
+          // Período atual: último trimestre
+          currentStartDate = startOfQuarter(now);
+          // Período de comparação: trimestre anterior
+          compareStartDate = subMonths(now, 3);
+          compareStartDate = startOfQuarter(compareStartDate);
+          compareEndDate = endOfQuarter(compareStartDate);
+          break;
+        case "year":
+          // Período atual: último ano
+          currentStartDate = startOfYear(now);
+          // Período de comparação: ano anterior
+          compareStartDate = subYears(now, 1);
+          compareStartDate = startOfYear(compareStartDate);
+          compareEndDate = endOfYear(compareStartDate);
+          break;
+      }
+      
+      // Buscar todos os pedidos para poder filtrar por período
+      console.log("Buscando todos os pedidos...");
+      const allOrders = await fetchOrders("all") || [];
+      console.log(`Total de pedidos encontrados: ${allOrders.length}`);
+      
+      // Filtrar por período atual
+      const currentOrders = allOrders.filter(order => 
+        order.createdAt && order.createdAt >= currentStartDate
+      );
+      
+      // Filtrar por período de comparação
+      const comparisonOrders = allOrders.filter(order => 
+        order.createdAt && 
+        order.createdAt >= compareStartDate && 
+        order.createdAt <= compareEndDate
+      );
+      
+      console.log(`Pedidos no período atual (${timeRange}): ${currentOrders.length}`);
+      console.log(`Pedidos no período anterior: ${comparisonOrders.length}`);
+      
+      // Aplicar filtros avançados aos pedidos do período atual
+      const filteredCurrentOrders = showAdvancedFilters 
+        ? applyAdvancedFilters(currentOrders) 
+        : currentOrders;
+      
+      // Processar dados do período atual
+      const currentProcessedData = {
+        ordersByMonth: processOrdersByMonth(filteredCurrentOrders),
+        customers: processCustomerData(filteredCurrentOrders, allCustomerOrderCounts),
+        popularDishes: processPopularDishes(filteredCurrentOrders),
+        ordersByTime: processOrdersByTime(filteredCurrentOrders),
+        ordersByLocation: processOrdersByLocation(filteredCurrentOrders),
+        weeklyOrders: processWeeklyOrders(filteredCurrentOrders),
+        deliveryTimes: processDeliveryTimes(filteredCurrentOrders),
+        recentOrders: processRecentOrders(filteredCurrentOrders),
+        
+        totalOrders: filteredCurrentOrders.length,
+        totalRevenue: filteredCurrentOrders.reduce((sum, order) => 
+          sum + Number(order.payment?.total || 0), 0)
+      };
+      
+      // Processar dados do período de comparação
+      const comparisonProcessedData = {
+        ordersByMonth: processOrdersByMonth(comparisonOrders),
+        ordersByTime: processOrdersByTime(comparisonOrders),
+        weeklyOrders: processWeeklyOrders(comparisonOrders),
+        
+        totalOrders: comparisonOrders.length,
+        totalRevenue: comparisonOrders.reduce((sum, order) => 
+          sum + Number(order.payment?.total || 0), 0)
+      };
+      
+      // Calcular crescimento com base nos períodos
+      const orderGrowth = calculateGrowth(
+        currentProcessedData.totalOrders, 
+        comparisonProcessedData.totalOrders
+      );
+      
+      const revenueGrowth = calculateGrowth(
+        currentProcessedData.totalRevenue, 
+        comparisonProcessedData.totalRevenue
+      );
+      
+      // Combinar dados para gráficos com comparação
+      // Para gráfico semanal
+      const combinedWeeklyData = currentProcessedData.weeklyOrders.map((item, index) => {
+        const compareItem = comparisonProcessedData.weeklyOrders[index];
+        return {
+          ...item,
+          compareOrders: compareItem ? compareItem.orders : 0
+        };
+      });
+      
+      // Para gráfico de horários
+      const combinedTimeData = currentProcessedData.ordersByTime.map((item, index) => {
+        const compareItem = comparisonProcessedData.ordersByTime[index];
+        return {
+          ...item,
+          compareOrders: compareItem ? compareItem.orders : 0
+        };
+      });
+      
+      // Atualizar todos os estados
+      setOrderData(currentProcessedData.ordersByMonth);
+      setCompareOrderData(comparisonProcessedData.ordersByMonth);
+      setCustomerData(currentProcessedData.customers);
+      setPopularDishes(currentProcessedData.popularDishes);
+      setOrdersByTime(combinedTimeData); // Já combinado com comparação
+      setOrdersByLocation(currentProcessedData.ordersByLocation);
+      setWeeklyOrders(combinedWeeklyData); // Já combinado com comparação
+      setDeliveryTimes(currentProcessedData.deliveryTimes);
+      setRecentOrders(currentProcessedData.recentOrders);
+      
+      // Calcular a média de pedidos por cliente
+      let averageOrdersPerCustomer = 0;
+      if (Object.keys(allCustomerOrderCounts).length > 0) {
+        const totalCustomers = Object.keys(allCustomerOrderCounts).length;
+        const totalOrdersCount = Object.values(allCustomerOrderCounts).reduce((sum, count) => sum + count, 0);
+        averageOrdersPerCustomer = totalOrdersCount / totalCustomers;
+      }
 
-  const lastMonthOrders = orderData.length > 0 ? orderData[orderData.length - 1].orders : 0
-  const previousMonthOrders = orderData.length > 1 ? orderData[orderData.length - 2].orders : 0
-  const orderGrowth = calculateGrowth(lastMonthOrders, previousMonthOrders)
+      // Atualizar métricas com crescimento calculado
+      setMetrics({
+        totalOrders: currentProcessedData.totalOrders,
+        totalRevenue: currentProcessedData.totalRevenue,
+        totalCustomers: currentProcessedData.customers.reduce((sum, item) => sum + item.value, 0),
+        averageOrderValue: currentProcessedData.totalOrders > 0 
+          ? (currentProcessedData.totalRevenue / currentProcessedData.totalOrders).toFixed(2) 
+          : "0.00",
+        orderGrowth,
+        revenueGrowth,
+        averageOrdersPerCustomer
+      });
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error);
+      resetAllData();
+      setIsLoading(false);
+    }
+  };
 
-  const lastMonthRevenue = orderData.length > 0 ? orderData[orderData.length - 1].revenue : 0
-  const previousMonthRevenue = orderData.length > 1 ? orderData[orderData.length - 2].revenue : 0
-  const revenueGrowth = calculateGrowth(lastMonthRevenue, previousMonthRevenue)
+  // Função auxiliar para resetar dados em caso de erro
+  const resetAllData = () => {
+    setOrderData([]);
+    setCompareOrderData([]);
+    setCustomerData([]);
+    setPopularDishes([]);
+    setOrdersByTime([]);
+    setOrdersByLocation([]);
+    setWeeklyOrders([]);
+    setDeliveryTimes([]);
+    setRecentOrders([]);
+    setMetrics({
+      totalOrders: 0,
+      totalRevenue: 0,
+      totalCustomers: 0,
+      averageOrderValue: "0.00",
+      orderGrowth: "0.0",
+      revenueGrowth: "0.0",
+      averageOrdersPerCustomer: 0
+    });
+  };
 
-  // Função para renderizar um gráfico com verificação de dados - corrigida para tipagem
+  // Efeito para carregar dados
+  useEffect(() => {
+    loadData();
+  }, [timeRange, showAdvancedFilters, productFilter, timeFilter, minOrderValue]); // Simplificar dependências
+  
+  // Função atualizada para renderizar gráficos
   const renderChart = (chartType: string, data: any[], renderFn: () => ReactElement<any, string | JSXElementConstructor<any>>): ReactElement<any, string | JSXElementConstructor<any>> => {
     if (isLoading) {
       return (
@@ -638,27 +914,184 @@ export default function AdminDashboard() {
       ) as ReactElement<any, string | JSXElementConstructor<any>>;
     }
 
+    // Verificar se os dados possuem campos de comparação
+    const hasComparisonData = data.some(item => {
+      return typeof item.compareOrders === 'number' && item.compareOrders > 0;
+    });
+
+    if (!hasComparisonData && chartType !== 'line') {
+      console.log(`Sem dados de comparação significativos para ${chartType}`);
+    }
+
     return renderFn();
   };
 
   return (
     <div className="space-y-6">
-      {/* Seletor de período */}
-      <div className="flex justify-between items-center">
+      {/* Seletor de período e filtros avançados */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h2 className="text-2xl font-light">Visão Geral</h2>
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-neutral-500" />
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="w-[180px] rounded-none">
-              <SelectValue placeholder="Selecione o período" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="week">Última Semana</SelectItem>
-              <SelectItem value="month">Último Mês</SelectItem>
-              <SelectItem value="quarter">Último Trimestre</SelectItem>
-              <SelectItem value="year">Último Ano</SelectItem>
-            </SelectContent>
-          </Select>
+        
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full md:w-auto">
+          {/* Filtro principal de período */}
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-neutral-500" />
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="w-[180px] rounded-none">
+                <SelectValue placeholder="Selecione o período" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="week">Última Semana</SelectItem>
+                <SelectItem value="month">Último Mês</SelectItem>
+                <SelectItem value="quarter">Último Trimestre</SelectItem>
+                <SelectItem value="year">Último Ano</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Filtros avançados */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9">
+                Filtros avançados
+                {showAdvancedFilters && <Badge className="ml-2 bg-primary text-xs">Ativos</Badge>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80">
+              <div className="space-y-4">
+                <h4 className="font-medium">Configurar filtros</h4>
+                
+                <div className="space-y-2">
+                  <Label>Produtos</Label>
+                  <div className="max-h-40 overflow-y-auto space-y-2 border rounded p-2">
+                    {availableProducts.map(product => (
+                      <div key={product} className="flex items-center space-x-2">
+                        <Checkbox 
+                          id={`product-${product}`} 
+                          checked={productFilter.includes(product)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setProductFilter(prev => [...prev, product]);
+                            } else {
+                              setProductFilter(prev => prev.filter(p => p !== product));
+                            }
+                          }}
+                        />
+                        <Label htmlFor={`product-${product}`}>{product}</Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Horário dos pedidos: {timeFilter[0]}h às {timeFilter[1]}h</Label>
+                  <Slider 
+                    value={timeFilter} 
+                    min={0} 
+                    max={23} 
+                    step={1}
+                    onValueChange={(value) => setTimeFilter(value as [number, number])}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Valor mínimo do pedido: R$ {minOrderValue}</Label>
+                  <Slider 
+                    value={[minOrderValue]} 
+                    min={0} 
+                    max={200} 
+                    step={10}
+                    onValueChange={(value) => setMinOrderValue(value[0])}
+                  />
+                </div>
+                
+                <div className="flex justify-between pt-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setProductFilter([]);
+                      setTimeFilter([10, 22]);
+                      setMinOrderValue(0);
+                      setShowAdvancedFilters(false);
+                    }}
+                  >
+                    Limpar
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={() => setShowAdvancedFilters(productFilter.length > 0 || timeFilter[0] !== 10 || timeFilter[1] !== 22 || minOrderValue > 0)}
+                  >
+                    Aplicar
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+          
+          {/* Botão de exportação */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 gap-1">
+                <Download className="h-4 w-4" /> Exportar
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72">
+              <div className="space-y-4">
+                <h4 className="font-medium">Exportar dados para Excel</h4>
+                <div className="flex flex-col gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="justify-start"
+                    onClick={() => exportToExcel(orderData, 'pedidos_por_mes')}
+                  >
+                    <Download className="h-4 w-4 mr-2" /> Pedidos por Mês
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="justify-start"
+                    onClick={() => exportToExcel(weeklyOrders, 'pedidos_por_dia')}
+                  >
+                    <Download className="h-4 w-4 mr-2" /> Pedidos por Dia da Semana
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="justify-start"
+                    onClick={() => exportToExcel(ordersByTime, 'pedidos_por_horario')}
+                  >
+                    <Download className="h-4 w-4 mr-2" /> Pedidos por Horário
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="justify-start"
+                    onClick={() => exportToExcel(popularDishes, 'produtos_populares')}
+                  >
+                    <Download className="h-4 w-4 mr-2" /> Produtos Populares
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="justify-start"
+                    onClick={() => exportToExcel(ordersByLocation, 'pedidos_por_regiao')}
+                  >
+                    <Download className="h-4 w-4 mr-2" /> Pedidos por Região
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="justify-start"
+                    onClick={() => exportToExcel(recentOrders, 'pedidos_recentes')}
+                  >
+                    <Download className="h-4 w-4 mr-2" /> Pedidos Recentes
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -671,19 +1104,17 @@ export default function AdminDashboard() {
             <ShoppingBag className="h-4 w-4 text-neutral-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : totalOrders.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{isLoading ? "..." : metrics.totalOrders.toLocaleString()}</div>
             <div className="flex items-center pt-1 text-xs">
               {!isLoading && (
-                <>
-                  {Number(orderGrowth) > 0 ? (
-                    <ArrowUp className="h-3 w-3 text-green-500 mr-1" />
+                <span className={Number(metrics.orderGrowth) > 0 ? "text-green-500 flex items-center" : "text-red-500 flex items-center"}>
+                  {Number(metrics.orderGrowth) > 0 ? (
+                    <ArrowUp className="h-3 w-3 mr-1" />
                   ) : (
-                    <ArrowDown className="h-3 w-3 text-red-500 mr-1" />
+                    <ArrowDown className="h-3 w-3 mr-1" />
                   )}
-                  <span className={Number(orderGrowth) > 0 ? "text-green-500" : "text-red-500"}>
-                    {orderGrowth}% em relação ao mês anterior
-                  </span>
-                </>
+                  {metrics.orderGrowth}% em relação ao período anterior
+                </span>
               )}
             </div>
           </CardContent>
@@ -696,19 +1127,17 @@ export default function AdminDashboard() {
             <DollarSign className="h-4 w-4 text-neutral-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : `R$ ${totalRevenue.toLocaleString()}`}</div>
+            <div className="text-2xl font-bold">{isLoading ? "..." : `R$ ${metrics.totalRevenue.toLocaleString()}`}</div>
             <div className="flex items-center pt-1 text-xs">
               {!isLoading && (
-                <>
-                  {Number(revenueGrowth) > 0 ? (
-                    <ArrowUp className="h-3 w-3 text-green-500 mr-1" />
+                <span className={Number(metrics.revenueGrowth) > 0 ? "text-green-500 flex items-center" : "text-red-500 flex items-center"}>
+                  {Number(metrics.revenueGrowth) > 0 ? (
+                    <ArrowUp className="h-3 w-3 mr-1" />
                   ) : (
-                    <ArrowDown className="h-3 w-3 text-red-500 mr-1" />
+                    <ArrowDown className="h-3 w-3 mr-1" />
                   )}
-                  <span className={Number(revenueGrowth) > 0 ? "text-green-500" : "text-red-500"}>
-                    {revenueGrowth}% em relação ao mês anterior
-                  </span>
-                </>
+                  {metrics.revenueGrowth}% em relação ao período anterior
+                </span>
               )}
             </div>
           </CardContent>
@@ -721,7 +1150,7 @@ export default function AdminDashboard() {
             <Users className="h-4 w-4 text-neutral-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : totalCustomers.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{isLoading ? "..." : metrics.totalCustomers.toLocaleString()}</div>
             <div className="text-xs text-neutral-500 pt-1">
               {!isLoading && (
                 <>
@@ -740,9 +1169,9 @@ export default function AdminDashboard() {
             <TrendingUp className="h-4 w-4 text-neutral-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : `R$ ${averageOrderValue}`}</div>
+            <div className="text-2xl font-bold">{isLoading ? "..." : `R$ ${metrics.averageOrderValue}`}</div>
             <div className="text-xs text-neutral-500 pt-1">
-              {!isLoading && `Baseado em ${totalOrders.toLocaleString()} pedidos`}
+              {!isLoading && `Baseado em ${metrics.totalOrders.toLocaleString()} pedidos`}
             </div>
           </CardContent>
         </Card>
@@ -770,9 +1199,11 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Gráfico de Pedidos por Mês */}
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
                 <CardTitle>Pedidos por Mês</CardTitle>
                 <CardDescription>Número total de pedidos por mês</CardDescription>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="h-[300px] w-full">
@@ -786,7 +1217,14 @@ export default function AdminDashboard() {
                           allowDecimals={false}
                           tickFormatter={(value) => Math.round(value).toString()}
                         />
-                        <Tooltip formatter={(value) => [`${value} pedidos`, "Total"]} />
+                        <Tooltip 
+                          formatter={(value, name) => [
+                            `${value} pedidos`, 
+                            name === "orders" ? "Total de Pedidos" : name
+                          ]}
+                          labelFormatter={(label) => `Mês: ${label}`}
+                          contentStyle={{ borderRadius: '8px' }}
+                        />
                         <Legend />
                         <Line
                           type="monotone"
@@ -797,6 +1235,21 @@ export default function AdminDashboard() {
                           dot={{ r: 4 }}
                           name="Pedidos"
                         />
+                        
+                        {/* Adiciona linha de comparação se estiver comparando */}
+                        {compareOrderData.length > 0 && (
+                          <Line
+                            type="monotone"
+                            data={compareOrderData}
+                            dataKey="orders"
+                            stroke="#82ca9d"
+                            strokeWidth={2}
+                            strokeDasharray="5 5"
+                            activeDot={{ r: 6 }}
+                            dot={{ r: 3 }}
+                            name="Período anterior"
+                          />
+                        )}
                       </LineChart>
                     ))}
                   </ResponsiveContainer>
@@ -822,16 +1275,28 @@ export default function AdminDashboard() {
                           allowDecimals={false}
                           tickFormatter={(value) => Math.round(value).toString()}
                         />
-                        <Tooltip formatter={(value) => [`${value} pedidos`, "Total"]} />
+                        <Tooltip 
+                          formatter={(value, name) => [
+                            `${value} pedidos`, 
+                            name === "orders" ? "Período atual" : "Período anterior"
+                          ]} 
+                        />
                         <Legend />
-                        <Bar dataKey="orders" fill="#8884d8" radius={[4, 4, 0, 0]} barSize={40} name="Pedidos" />
+                        <Bar dataKey="orders" fill="#8884d8" radius={[4, 4, 0, 0]} barSize={30} name="Período atual" />
+                        {compareOrderData.length > 0 && (
+                          <Bar 
+                            dataKey="compareOrders"
+                            fill="#82ca9d" 
+                            radius={[4, 4, 0, 0]} 
+                            barSize={30} 
+                            name="Período anterior" 
+                          />
+                        )}
                       </BarChart>
                     ))}
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-4 text-sm text-neutral-500 text-center">
-                  Sexta e sábado são os dias com maior volume de pedidos
-                </div>
+                {/* Área de informações secundárias removida */}
               </CardContent>
             </Card>
 
@@ -853,16 +1318,29 @@ export default function AdminDashboard() {
                           allowDecimals={false}
                           tickFormatter={(value) => Math.round(value).toString()}
                         />
-                        <Tooltip formatter={(value) => [`${value} pedidos`, "Total"]} />
+                        <Tooltip 
+                          formatter={(value, name) => [
+                            `${value} pedidos`, 
+                            name === "orders" ? "Atual" : "Período anterior"
+                          ]}
+                        />
                         <Legend />
-                        <Bar dataKey="orders" fill="#82ca9d" radius={[4, 4, 0, 0]} barSize={40} name="Pedidos" />
+                        <Bar dataKey="orders" fill="#82ca9d" radius={[4, 4, 0, 0]} barSize={30} name="Pedidos" />
+                        {compareOrderData.length > 0 && (
+                          <Bar 
+                            dataKey="compareOrders"
+                            fill="#8884d8" 
+                            radius={[4, 4, 0, 0]} 
+                            barSize={30} 
+                            name="Pedidos (período anterior)" 
+                            opacity={0.7}
+                          />
+                        )}
                       </BarChart>
                     ))}
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-4 text-sm text-neutral-500 text-center">
-                  Picos de pedidos no horário de almoço (12-14h) e jantar (18-20h)
-                </div>
+                {/* Área de informações secundárias removida */}
               </CardContent>
             </Card>
 
@@ -898,9 +1376,7 @@ export default function AdminDashboard() {
                     ))}
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-4 text-sm text-neutral-500 text-center">
-                  Crescimento constante na receita ao longo do ano, com pico em dezembro
-                </div>
+                {/* Área de informações secundárias removida */}
               </CardContent>
             </Card>
           </div>
@@ -954,7 +1430,7 @@ export default function AdminDashboard() {
                 <div className="h-[300px] flex items-center justify-center w-full">
                   <div className="text-center">
                     <div className="text-4xl font-bold text-primary">
-                      {isLoading ? "..." : averageOrdersPerCustomer}
+                      {isLoading ? "..." : metrics.averageOrdersPerCustomer.toFixed(1)}
                     </div>
                     <div className="text-sm text-neutral-500 mt-2">Pedidos por cliente (média geral)</div>
                   </div>

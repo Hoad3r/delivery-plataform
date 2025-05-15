@@ -174,7 +174,7 @@ export default function AdminOrders() {
     
     try {
       // 1. Construir query base
-      const ordersRef = collection(db, 'orders')
+        const ordersRef = collection(db, 'orders')
       let queryConstraints: any[] = []
       
       // 2. Adicionar filtros de status
@@ -255,7 +255,7 @@ export default function AdminOrders() {
       
       // 7. Executar a consulta
       const q = query(ordersRef, ...queryConstraints)
-      const querySnapshot = await getDocs(q)
+        const querySnapshot = await getDocs(q)
         
       // 8. Salvar o último documento para próxima página
       const docs = querySnapshot.docs
@@ -267,41 +267,41 @@ export default function AdminOrders() {
       
       // 9. Processar os resultados
       const pedidosCarregados = docs.map(doc => {
-        const data = doc.data()
-        let createdAt: Date
+          const data = doc.data()
+          let createdAt: Date
 
-        if (data.createdAt?.toDate) {
-          createdAt = data.createdAt.toDate()
-        } else if (data.createdAt instanceof Date) {
-          createdAt = data.createdAt
-        } else if (typeof data.createdAt === 'string') {
-          createdAt = new Date(data.createdAt)
-        } else {
-          createdAt = new Date()
-        }
+          if (data.createdAt?.toDate) {
+            createdAt = data.createdAt.toDate()
+          } else if (data.createdAt instanceof Date) {
+            createdAt = data.createdAt
+          } else if (typeof data.createdAt === 'string') {
+            createdAt = new Date(data.createdAt)
+          } else {
+            createdAt = new Date()
+          }
 
-        // Normaliza o status
+          // Normaliza o status
         let status = data.status || 'payment_pending'
-        if (status === 'processing') status = 'preparing'
-        if (status === 'canceled') status = 'cancelled'
+          if (status === 'processing') status = 'preparing'
+          if (status === 'canceled') status = 'cancelled'
 
-        const order = {
+          const order = {
           docId: doc.id,
           id: data.id || doc.id,
-          userId: data.userId || '',
-          user: data.user || { name: '', phone: '' },
-          type: data.type || 'delivery',
-          status: status as OrderStatus,
-          delivery: data.delivery || { address: '', time: null },
-          items: data.items || [],
-          payment: data.payment || { method: 'cash', total: 0, status: 'pending' },
-          notes: data.notes || '',
+            userId: data.userId || '',
+            user: data.user || { name: '', phone: '' },
+            type: data.type || 'delivery',
+            status: status as OrderStatus,
+            delivery: data.delivery || { address: '', time: null },
+            items: data.items || [],
+            payment: data.payment || { method: 'cash', total: 0, status: 'pending' },
+            notes: data.notes || '',
           createdAt: createdAt.toISOString(),
           statusHistory: data.statusHistory || {}
-        }
+          }
 
-        return order as unknown as Order
-      })
+          return order as unknown as Order
+        })
 
       // 10. Atualizar o estado
       if (reset) {
@@ -315,15 +315,15 @@ export default function AdminOrders() {
       }
       
       console.log(`Carregados ${pedidosCarregados.length} pedidos. Há mais? ${hasMore}`)
-    } catch (error) {
-      console.error('Erro ao carregar pedidos:', error)
-      toast({
-        title: "Erro",
-        description: "Não foi possível carregar os pedidos.",
-        variant: "destructive",
-      })
+      } catch (error) {
+        console.error('Erro ao carregar pedidos:', error)
+        toast({
+          title: "Erro",
+          description: "Não foi possível carregar os pedidos.",
+          variant: "destructive",
+        })
     } finally {
-      setIsLoading(false)
+        setIsLoading(false)
       setLoadingMore(false)
     }
   }, [statusFilter, dateFilter, lastVisible, pageSize, toast])
@@ -336,8 +336,8 @@ export default function AdminOrders() {
     // Limpar timer anterior se existir
     if (searchDebounceTimer) {
       clearTimeout(searchDebounceTimer)
-    }
-    
+  }
+
     // Configurar novo timer de debounce (300ms)
     const newTimer = setTimeout(() => {
       if (term === '') {
@@ -1034,15 +1034,15 @@ export default function AdminOrders() {
 
                     {selectedOrder.status === "pending" && (
                       <>
-                        <Button
-                          variant="outline"
-                          className="flex items-center gap-2"
-                          onClick={() => {
+                      <Button
+                        variant="outline"
+                        className="flex items-center gap-2"
+                        onClick={() => {
                             handleStatusChange(selectedOrder.id, "preparing");
-                          }}
-                        >
+                        }}
+                      >
                           <CheckCircle className="h-4 w-4" /> Aceitar Pedido
-                        </Button>
+                      </Button>
                         <Button
                           variant="outline"
                           className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
@@ -1057,10 +1057,10 @@ export default function AdminOrders() {
 
                     {selectedOrder.status === "preparing" && (
                       <>
-                        <Button
-                          variant="outline"
-                          className="flex items-center gap-2"
-                          onClick={() => {
+                      <Button
+                        variant="outline"
+                        className="flex items-center gap-2"
+                        onClick={() => {
                             handleStatusChange(selectedOrder.id, "delivering");
                           }}
                         >
@@ -1071,10 +1071,10 @@ export default function AdminOrders() {
                           className="flex items-center gap-2"
                           onClick={() => {
                             handleStatusChange(selectedOrder.id, "delivered");
-                          }}
-                        >
-                          <CheckCircle className="h-4 w-4" /> Marcar como Entregue
-                        </Button>
+                        }}
+                      >
+                        <CheckCircle className="h-4 w-4" /> Marcar como Entregue
+                      </Button>
                         <Button
                           variant="outline"
                           className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
@@ -1098,15 +1098,15 @@ export default function AdminOrders() {
                         >
                           <CheckCircle className="h-4 w-4" /> Marcar como Entregue
                         </Button>
-                        <Button
-                          variant="outline"
-                          className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
-                          onClick={() => {
+                      <Button
+                        variant="outline"
+                        className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={() => {
                             handleStatusChange(selectedOrder.id, "cancelled");
-                          }}
-                        >
+                        }}
+                      >
                           <XCircle className="h-4 w-4" /> Cancelar (Não Entregue)
-                        </Button>
+                      </Button>
                       </>
                     )}
                   </div>
@@ -1119,13 +1119,13 @@ export default function AdminOrders() {
                       <div className="flex gap-3" key={`timeline-${index}`}>
                         <div className={`w-6 h-6 rounded-full ${item.bgColor} flex items-center justify-center`}>
                           {item.icon}
-                        </div>
-                        <div>
+                      </div>
+                      <div>
                           <div className="text-sm font-medium">{item.label}</div>
                           <div className="text-xs text-neutral-500">
                             {format(item.timestamp, "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                          </div>
-                        </div>
+                      </div>
+                    </div>
                       </div>
                     ))}
                   </div>
