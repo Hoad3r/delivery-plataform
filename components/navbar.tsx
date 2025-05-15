@@ -172,15 +172,6 @@ export default function Navbar() {
                               >
                                 Minha Conta
                               </Link>
-                              <Link
-                                href="/meus-pedidos"
-                                onClick={() => setIsOpen(false)}
-                                className={`block text-xl font-medium text-[#DB775F] hover:text-[#DB775F]/80 transition-colors ${
-                                  pathname.startsWith("/meus-pedidos") ? "text-[#DB775F]/80" : ""
-                                }`}
-                              >
-                                Meus Pedidos
-                              </Link>
                             </>
                           )}
                           <button
