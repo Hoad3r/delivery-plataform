@@ -30,6 +30,8 @@ import { useCart } from "@/context/cart-context"
 import { useAuth } from "@/context/auth-context"
 import { formatCurrency } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
+import { db } from "@/lib/firebase"
+import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 
 // Define validation schema
 const checkoutSchema = z.object({
@@ -158,10 +160,25 @@ export default function CheckoutPage() {
       console.log("Resposta PIX:", pixData)
 
       if (!pixResponse.ok) {
-        console.error('Erro PIX:', pixData)
+        console.error('Erro PIX:', {
+          status: pixResponse.status,
+          data: pixData
+        })
         toast({
           title: "Erro ao gerar pagamento PIX",
-          description: pixData.error?.message || "Tente novamente.",
+          description: pixData.error || "Tente novamente.",
+          variant: "destructive",
+        })
+        setIsSubmitting(false)
+        setIsProcessingOrder(false)
+        return
+      }
+
+      if (!pixData.qr_code || !pixData.qr_code_base64) {
+        console.error('QR Code não encontrado na resposta:', pixData)
+        toast({
+          title: "Erro ao gerar QR Code",
+          description: "Não foi possível gerar o QR Code PIX. Tente novamente.",
           variant: "destructive",
         })
         setIsSubmitting(false)
@@ -178,6 +195,7 @@ export default function CheckoutPage() {
       toast({
         title: "QR Code PIX gerado",
         description: "Escaneie o QR Code ou copie o código para pagar.",
+        variant: "success"
       })
     } catch (error) {
       console.error("Erro ao processar pedido:", error)
@@ -192,13 +210,62 @@ export default function CheckoutPage() {
   }
 
   const handlePixPaid = async () => {
-    setIsPixPaid(true)
-    clearCart()
-    toast({
-      title: "Pagamento confirmado!",
-      description: "Seu pedido foi recebido e está sendo processado.",
-    })
-    router.push("/pedido-confirmado")
+    try {
+      // Gerar ID do pedido no formato ORD-XXXXX
+      const orderNumber = Math.floor(10000 + Math.random() * 90000).toString()
+      const orderId = `ORD-${orderNumber}`
+
+      // Preparar dados do pedido
+      const orderData = {
+        id: orderId,
+        userId: isAuthenticated ? user?.id : null,
+        user: {
+          name: isAuthenticated ? user?.name : form.getValues("name"),
+          phone: isAuthenticated ? user?.phone : form.getValues("phone"),
+          email: user?.email || null
+        },
+        type: form.getValues("deliveryMethod"),
+        status: "payment_pending",
+        delivery: form.getValues("deliveryMethod") === "delivery" ? {
+          address: `${form.getValues("streetName")}, ${form.getValues("number")}${form.getValues("complement") ? ` - ${form.getValues("complement")}` : ''}`,
+          time: null
+        } : null,
+        items: cart,
+        payment: {
+          method: "pix",
+          total: total,
+          status: "pending",
+          pixCode: pixCode
+        },
+        notes: form.getValues("notes"),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        statusHistory: {
+          payment_pending: serverTimestamp()
+        }
+      }
+
+      // Salvar pedido no Firebase
+      const orderRef = await addDoc(collection(db, "orders"), orderData)
+      
+      console.log("Pedido salvo com sucesso:", orderRef.id)
+      
+      setIsPixPaid(true)
+      clearCart()
+      toast({
+        title: "Pagamento confirmado!",
+        description: "Seu pedido foi recebido e está sendo processado.",
+        variant: "success"
+      })
+      router.push("/pedido-confirmado")
+    } catch (error) {
+      console.error("Erro ao salvar pedido:", error)
+      toast({
+        title: "Erro ao confirmar pedido",
+        description: "Ocorreu um erro ao salvar seu pedido. Por favor, tente novamente.",
+        variant: "destructive"
+      })
+    }
   }
 
   if (isProcessingOrder) {
@@ -631,7 +698,11 @@ export default function CheckoutPage() {
               <h2 className="text-2xl font-medium">Pague com PIX</h2>
               
               <div className="bg-white p-4 rounded-lg shadow-lg">
-                <img src={`data:image/png;base64,${pixQrCode}`} alt="QR Code PIX" className="w-64 h-64" />
+                <img 
+                  src={`data:image/png;base64,${pixQrCode}`} 
+                  alt="QR Code PIX" 
+                  className="w-64 h-64"
+                />
               </div>
 
               <div className="w-full space-y-4">

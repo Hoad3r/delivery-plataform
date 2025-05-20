@@ -49,22 +49,32 @@ interface OrderPayment {
   method: 'credit' | 'debit' | 'pix' | 'cash'
   card?: string
   total: number
+  status: 'pending' | 'paid' | 'refunded'
 }
 
 interface OrderDelivery {
-  address: string
-  time: string
+  address: string | null
+  time: string | null
 }
 
 interface Order {
   id: string
-  date: Date
-  status: 'preparing' | 'delivering' | 'delivered' | 'cancelled' | 'pending' | 'payment_pending'
+  docId: string
+  userId: string
+  user: {
+    name: string
+    phone: string
+    email: string | null
+  }
+  type: 'delivery' | 'pickup'
+  status: 'payment_pending' | 'pending' | 'preparing' | 'delivering' | 'delivered' | 'cancelled'
   items: OrderItem[]
-  total: number
   delivery: OrderDelivery
   payment: OrderPayment
-  userId?: string
+  notes: string
+  createdAt: string
+  updatedAt: string
+  statusHistory?: Record<string, any>
 }
 
 export default function OrdersPage() {
@@ -121,11 +131,21 @@ export default function OrdersPage() {
           const pedidosCarregados = querySnapshot.docs.map(doc => {
             const data = doc.data()
             return {
-              id: doc.id,
-              ...data,
-              date: new Date(data.createdAt),
-            }
-          }) as Order[]
+              docId: doc.id,
+              id: data.id || doc.id,
+              userId: data.userId,
+              user: data.user,
+              type: data.type,
+              status: data.status,
+              items: data.items,
+              delivery: data.delivery,
+              payment: data.payment,
+              notes: data.notes || '',
+              createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+              updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+              statusHistory: data.statusHistory || {}
+            } as Order
+          })
 
           setOrders(pedidosCarregados)
           setFilteredOrders(pedidosCarregados)
@@ -173,13 +193,13 @@ export default function OrdersPage() {
     // Apply date range filter
     if (startDate) {
       const start = new Date(startDate)
-      result = result.filter((order) => order.date >= start)
+      result = result.filter((order) => new Date(order.createdAt) >= start)
     }
 
     if (endDate) {
       const end = new Date(endDate)
       end.setHours(23, 59, 59, 999) // End of the day
-      result = result.filter((order) => order.date <= end)
+      result = result.filter((order) => new Date(order.createdAt) <= end)
     }
 
     setFilteredOrders(result)
@@ -340,7 +360,7 @@ export default function OrdersPage() {
                       </div>
                       <div className="flex items-center gap-2 mt-1 text-sm text-neutral-500">
                         <Calendar className="h-4 w-4" />
-                        <span>{format(order.date, "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                        <span>{format(new Date(order.createdAt), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}</span>
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -413,7 +433,7 @@ export default function OrdersPage() {
             <DialogHeader>
               <DialogTitle>Detalhes do Pedido {selectedOrder.id}</DialogTitle>
               <DialogDescription>
-                {format(selectedOrder.date, "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}
+                {format(new Date(selectedOrder.createdAt), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}
               </DialogDescription>
             </DialogHeader>
 
