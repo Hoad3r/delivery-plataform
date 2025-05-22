@@ -120,10 +120,10 @@ export default function MenuItems() {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
         transition={{ duration: 0.2 }}
-        className={isMobileCard ? "min-w-[280px] w-[280px] snap-start pl-4 first:pl-4" : ""}
+        className={isMobileCard ? "min-w-[280px] w-[280px] snap-start pl-4 first:pl-4" : "h-full"}
       >
         <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl h-full">
-          <div className="relative h-48">
+          <div className="relative h-72">
             <Image
               src={dish.image}
               alt={dish.name}
@@ -225,7 +225,13 @@ export default function MenuItems() {
     <div ref={containerRef} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 mb-12">
       <AnimatePresence mode="wait">
         {displayedItems.length > 0 ? (
-          displayedItems.map((dish) => renderDishCard(dish, false))
+          <>
+            {displayedItems.map((dish) => renderDishCard(dish, false))}
+            {/* Seção extra quando houver 2 ou 3 cards */}
+            {(displayedItems.length === 2 || displayedItems.length === 3) && (
+              <div className="col-span-1 sm:col-span-2 xl:col-span-3 h-[400px]"></div>
+            )}
+          </>
         ) : null}
       </AnimatePresence>
     </div>

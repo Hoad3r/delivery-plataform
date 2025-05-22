@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       // Definir data de expiração para 24 horas
       date_of_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       external_reference: `ORDER_${Date.now()}`,
-      notification_url: 'https://seu-site.com/webhook',
+      notification_url: 'https://f147-168-0-235-43.ngrok-free.app/api/mercadopago-webhook',
       statement_descriptor: 'Nossa Cozinha'
     }
 
@@ -50,18 +50,18 @@ export async function POST(request: Request) {
 
     try {
       console.log('Iniciando chamada ao Mercado Pago...')
-      
+
       // Criar o pagamento
       const paymentResponse = await fetch('https://api.mercadopago.com/v1/payments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer TEST-5338159686365370-050721-a76b211a4d715cd281995e4002b62d84-187235033',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer TEST-5338159686365370-050721-a76b211a4d715cd281995e4002b62d84-187235033',
           'X-Idempotency-Key': idempotencyKey,
           'Accept': 'application/json'
-        },
-        body: JSON.stringify(mercadopagoPayload),
-      })
+      },
+      body: JSON.stringify(mercadopagoPayload),
+    })
 
       console.log('Status da resposta do Mercado Pago:', paymentResponse.status)
       

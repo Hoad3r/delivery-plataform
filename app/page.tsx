@@ -68,65 +68,31 @@ export default function Home() {
       </section>
 
       {/* Sobre nós - Seção minimalista */}
-      <section className="py-16 sm:py-24 bg-[#f4f1ea] relative overflow-hidden">
-        {/* Imagens decorativas grandes, animadas, só nas bordas e nunca sobre o texto */}
-        <div className="pointer-events-none select-none absolute inset-0 w-full h-full z-0">
-          {/* Mobile: só 2 imagens, bem afastadas do texto */}
-          <div className="absolute top-[-40px] left-[-60px] w-[180px] h-[180px] opacity-18 rotate-[-10deg] animate-float-img1 sm:w-[380px] sm:h-[380px] sm:top-[-60px] sm:left-[-100px]">
-            <Image src="/images/broccoli.png" alt="Brócolis" fill className="object-contain" />
-          </div>
-          <div className="absolute bottom-[-60px] right-[-40px] w-[160px] h-[160px] opacity-13 rotate-[6deg] animate-float-img4 sm:w-[200px] sm:h-[200px] sm:bottom-[60px] sm:right-[120px]">
-            <Image src="/images/salt-pepper.png" alt="Sal e Pimenta" fill className="object-contain" />
-          </div>
-          {/* Desktop: demais imagens, só aparecem em sm+ e afastadas do centro */}
-          <div className="absolute top-[-30px] right-[40px] w-[300px] h-[300px] opacity-18 rotate-[18deg] animate-float-img2 hidden sm:block">
-            <Image src="/images/tomatoes.png" alt="Tomates" fill className="object-contain" />
-          </div>
-          <div className="absolute top-1/3 right-[320px] w-[200px] h-[200px] opacity-15 rotate-[-16deg] animate-float-img3 hidden sm:block">
-            <Image src="/images/pie.png" alt="Torta" fill className="object-contain" />
-          </div>
-          <div className="absolute top-[45%] left-[80px] w-[180px] h-[180px] opacity-14 rotate-[-8deg] animate-float-img5 hidden sm:block">
-            <Image src="/images/onion.png" alt="Cebola" fill className="object-contain" />
-          </div>
-          <div className="absolute bottom-[-100px] left-1/2 w-[340px] h-[340px] opacity-15 -translate-x-1/2 rotate-[10deg] animate-float-img6 hidden sm:block">
-            <Image src="/images/bread.png" alt="Pão" fill className="object-contain" />
-          </div>
-          <div className="absolute bottom-16 left-[180px] w-[160px] h-[160px] opacity-12 rotate-[22deg] animate-float-img7 hidden sm:block">
-            <Image src="/images/tomatoes.png" alt="Tomates" fill className="object-contain" />
-          </div>
-          <div className="absolute top-32 right-1/3 w-[160px] h-[160px] opacity-12 rotate-[-22deg] animate-float-img8 hidden sm:block">
-            <Image src="/images/broccoli.png" alt="Brócolis" fill className="object-contain" />
-          </div>
+      <section className="py-16 sm:py-24 relative overflow-hidden min-h-[400px]">
+        {/* Imagem de fundo cobrindo toda a seção, sem overlay */}
+        <div className="absolute inset-0 w-full h-full z-0">
+          <Image
+            src="/images/filosofia.png"
+            alt="Filosofia fundo"
+            fill
+            className="object-cover w-full h-full"
+            priority
+          />
         </div>
-        <div className="container mx-auto px-3 sm:px-4 max-w-[1200px] relative z-10">
-          <div className="grid md:grid-cols-2 gap-8 sm:gap-16 items-center">
-            <m.div 
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8 }}
-              viewport={{ once: true }}
-              className="space-y-4 sm:space-y-6"
-            >
+        <div className="container mx-auto px-3 sm:px-4 max-w-[1200px] relative z-10 h-full">
+          <div className="flex items-center justify-end min-h-[400px] h-full">
+            <div className="space-y-4 sm:space-y-6 max-w-xl ml-auto px-6 py-8 pl-[8vw] sm:pl-6" style={{ paddingLeft: 'clamp(24px, 8vw, 80px)' }}>
               <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-[#FF7A3D]">Nossa filosofia</h2>
               <div className="w-16 sm:w-20 h-[1px] bg-[#DB775F]"></div>
-              <p className="text-sm sm:text-base text-neutral-600 leading-relaxed">
+              <p className="text-sm sm:text-base text-neutral-900 leading-relaxed">
                 Acreditamos que a verdadeira gastronomia transcende o simples ato de alimentar. É uma expressão
                 artística que envolve todos os sentidos, criando memórias que perduram muito além da refeição.
               </p>
-              <p className="text-sm sm:text-base text-neutral-600 leading-relaxed">
+              <p className="text-sm sm:text-base text-neutral-900 leading-relaxed">
                 Cada prato é cuidadosamente elaborado pelo nosso chef executivo, combinando técnicas clássicas com
                 abordagens contemporâneas, sempre respeitando a sazonalidade e a origem dos ingredientes.
               </p>
-            </m.div>
-            
-            <m.div 
-              initial={{ opacity: 0, x: 20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8 }}
-              viewport={{ once: true }}
-              className="hidden"
-            >
-            </m.div>
+            </div>
           </div>
         </div>
       </section>
