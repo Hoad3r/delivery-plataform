@@ -5,9 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    console.log('Request body:', body)
-    
-    const { amount, description } = body
+    const { amount, description, orderId } = body
 
     // Validação dos dados
     if (!amount || isNaN(amount) || amount <= 0) {
@@ -18,7 +16,23 @@ export async function POST(request: Request) {
       )
     }
 
-    console.log('Gerando PIX para valor:', amount)
+    if (!orderId) {
+      console.error('ID do pedido não fornecido')
+      return NextResponse.json(
+        { error: 'ID do pedido é obrigatório' },
+        { status: 400 }
+      )
+    }
+
+    // Verificar se o token está configurado
+    const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN
+    if (!accessToken) {
+      console.error('Token de acesso do Mercado Pago não configurado')
+      return NextResponse.json(
+        { error: 'Configuração do Mercado Pago incompleta' },
+        { status: 500 }
+      )
+    }
 
     // Formatar o valor para ter sempre 2 casas decimais
     const formattedAmount = Number(amount.toFixed(2))
@@ -31,39 +45,29 @@ export async function POST(request: Request) {
       description: description || 'Pedido Nossa Cozinha',
       payment_method_id: 'pix',
       payer: {
-        email: 'test@test.com',
-        first_name: 'Test',
-        last_name: 'User',
-        identification: {
-          type: 'CPF',
-          number: '12345678909'
-        }
+        email: 'cliente@nossacozinha.com',
+        first_name: 'Cliente',
+        last_name: 'Nossa Cozinha'
       },
       // Definir data de expiração para 24 horas
       date_of_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      external_reference: `ORDER_${Date.now()}`,
-      notification_url: 'https://f147-168-0-235-43.ngrok-free.app/api/mercadopago-webhook',
+      external_reference: orderId,
+      notification_url: `https://nossacozinhajp.com.br/api/mercadopago-webhook`,
       statement_descriptor: 'Nossa Cozinha'
     }
 
-    console.log('Payload Mercado Pago:', mercadopagoPayload)
-
     try {
-      console.log('Iniciando chamada ao Mercado Pago...')
-
       // Criar o pagamento
       const paymentResponse = await fetch('https://api.mercadopago.com/v1/payments', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer TEST-5338159686365370-050721-a76b211a4d715cd281995e4002b62d84-187235033',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
           'X-Idempotency-Key': idempotencyKey,
           'Accept': 'application/json'
-      },
-      body: JSON.stringify(mercadopagoPayload),
-    })
-
-      console.log('Status da resposta do Mercado Pago:', paymentResponse.status)
+        },
+        body: JSON.stringify(mercadopagoPayload),
+      })
       
       if (!paymentResponse.ok) {
         const errorData = await paymentResponse.json()
@@ -72,6 +76,19 @@ export async function POST(request: Request) {
           statusText: paymentResponse.statusText,
           data: errorData
         })
+
+        // Handle specific PIX configuration error
+        if (errorData.message?.includes('Collector user without key enabled for QR')) {
+          return NextResponse.json(
+            { 
+              error: 'Erro na configuração do PIX',
+              details: 'Por favor, verifique se as credenciais da API estão corretas.',
+              status: paymentResponse.status
+            },
+            { status: 400 }
+          )
+        }
+
         return NextResponse.json(
           { 
             error: errorData.message || 'Erro ao gerar pagamento',
@@ -83,7 +100,6 @@ export async function POST(request: Request) {
       }
 
       const paymentData = await paymentResponse.json()
-      console.log('Resposta Mercado Pago:', paymentData)
 
       // Extrair dados do PIX da resposta
       const pixData = paymentData.point_of_interaction?.transaction_data
@@ -108,14 +124,6 @@ export async function POST(request: Request) {
         ticket_url: pixData.ticket_url,
         date_of_expiration: paymentData.date_of_expiration
       }
-
-      console.log('PIX gerado com sucesso:', {
-        id: response.id,
-        status: response.status,
-        hasQrCode: !!response.qr_code,
-        hasQrCodeBase64: !!response.qr_code_base64,
-        expiration: response.date_of_expiration
-      })
 
       return NextResponse.json(response)
     } catch (fetchError) {

@@ -31,13 +31,15 @@ import { useAuth } from "@/context/auth-context"
 import { formatCurrency } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { collection, addDoc, serverTimestamp, getDocs, query, doc, updateDoc } from "firebase/firestore"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Define validation schema
 const checkoutSchema = z.object({
   deliveryMethod: z.enum(["delivery", "pickup"]),
   paymentMethod: z.enum(["pix", "credit", "cash"]),
   name: z.string().min(3, "Nome é obrigatório").optional(),
+  email: z.string().email("Email inválido").optional(),
   phone: z.string().min(10, "Número de telefone inválido").optional(),
   streetName: z.string().optional(),
   postalCode: z.string().optional(),
@@ -54,13 +56,14 @@ export default function CheckoutPage() {
   const { toast } = useToast()
   const router = useRouter()
   const { cart, clearCart } = useCart()
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, addresses, addAddress } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [isProcessingOrder, setIsProcessingOrder] = useState(false)
   const [pixQrCode, setPixQrCode] = useState<string | null>(null)
   const [pixCode, setPixCode] = useState<string | null>(null)
   const [isPixPaid, setIsPixPaid] = useState(false)
+  const [paymentId, setPaymentId] = useState<string | null>(null)
 
   // Initialize form
   const form = useForm<CheckoutFormValues>({
@@ -69,6 +72,7 @@ export default function CheckoutPage() {
       deliveryMethod: "delivery",
       paymentMethod: "pix",
       name: "",
+      email: "",
       phone: "",
       streetName: "",
       postalCode: "",
@@ -101,9 +105,75 @@ export default function CheckoutPage() {
     if (mounted && isAuthenticated && user) {
       // Preencher o formulário com os dados do usuário se estiver autenticado
       form.setValue("name", user.name || "")
+      form.setValue("email", user.email || "")
       form.setValue("phone", user.phone || "")
+    } else {
+      // Clear saved addresses if user logs out
+      // setSavedAddresses([]);
     }
   }, [isAuthenticated, user, mounted, form])
+
+  // Poll Mercado Pago for payment status when paymentId is set
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (paymentId) {
+      intervalId = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/mercadopago/status?id=${paymentId}`);
+          const data = await response.json();
+
+          if (response.ok) {
+            console.log('Payment status check:', data.status);
+            if (data.status === 'approved') {
+              // Payment confirmed
+              clearInterval(intervalId!); // Stop polling
+              setPixQrCode(null); // Close modal
+              setPixCode(null);
+              setPaymentId(null); // Clear payment ID
+              setIsPixPaid(true); // Indicate payment is paid (optional, depends on usage)
+
+              // Proceed to save order and redirect
+              // You might want to move the order saving logic here or trigger it
+              // after payment is approved. For now, let's just redirect.
+              clearCart();
+              toast({
+                title: "Pagamento confirmado!",
+                description: "Seu pedido foi recebido e está sendo preparado.",
+                variant: "success"
+              });
+              router.push("/pedido-confirmado");
+            } else if (data.status === 'rejected' || data.status === 'cancelled') {
+              // Payment failed or cancelled
+              clearInterval(intervalId!); // Stop polling
+              setPixQrCode(null); // Close modal
+              setPixCode(null);
+              setPaymentId(null); // Clear payment ID
+              toast({
+                title: "Pagamento não aprovado",
+                description: "O pagamento foi rejeitado ou cancelado. Tente novamente.",
+                variant: "destructive"
+              });
+            }
+            // Keep polling for other statuses (pending, in_process, etc.)
+          } else {
+            console.error('Error fetching payment status:', data);
+            // Optionally stop polling after a few errors or show a message
+          }
+        } catch (error) {
+          console.error('Error during payment status polling:', error);
+          // Optionally stop polling after a few errors
+        }
+      }, 5000); // Poll every 5 seconds
+    }
+
+    // Cleanup interval on component unmount or when paymentId changes to null
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [paymentId, router, clearCart, toast]);
 
   // Handle form submission
   async function onSubmit(values: CheckoutFormValues) {
@@ -139,13 +209,40 @@ export default function CheckoutPage() {
         }
       }
 
+      // Save address if authenticated, delivery is selected, and saveAddress is checked
+      if (isAuthenticated && user?.id && values.deliveryMethod === "delivery" && values.saveAddress) {
+        try {
+          // Use the addAddress function from auth context
+          await addAddress({
+            street: values.streetName || "",
+            zipcode: values.postalCode || "",
+            number: values.number || "",
+            complement: values.complement || "",
+            neighborhood: values.referencePoint || "",
+            city: "",
+            state: "",
+            nickname: "Endereço de Entrega"
+          });
+          console.log("Address saved successfully!");
+        } catch (error) {
+          console.error("Error saving address:", error);
+          // Optionally inform the user that the address could not be saved
+          toast({
+            title: "Erro ao salvar endereço",
+            description: "Não foi possível salvar o endereço para uso futuro.",
+            variant: "destructive",
+          });
+        }
+      }
+
       console.log("Simulando chamada à API...")
       await new Promise((resolve) => setTimeout(resolve, 2000))
 
       // 1. Chame a API para gerar o pagamento PIX
       const pixPayload = {
         amount: Number(total.toFixed(2)),
-        description: `Pedido Nossa Cozinha - ${new Date().toLocaleDateString()}`
+        description: `Pedido Nossa Cozinha - ${new Date().toLocaleDateString()}`,
+        orderId: `ORD-${Math.floor(10000 + Math.random() * 90000)}` // Generate a random 5-digit order number
       }
       
       console.log("Payload PIX:", pixPayload)
@@ -156,17 +253,17 @@ export default function CheckoutPage() {
         body: JSON.stringify(pixPayload),
       })
 
-      const pixData = await pixResponse.json()
-      console.log("Resposta PIX:", pixData)
+      const paymentData = await pixResponse.json()
+      console.log("Resposta PIX:", paymentData)
 
       if (!pixResponse.ok) {
         console.error('Erro PIX:', {
           status: pixResponse.status,
-          data: pixData
+          data: paymentData
         })
         toast({
           title: "Erro ao gerar pagamento PIX",
-          description: pixData.error || "Tente novamente.",
+          description: paymentData.details || paymentData.error || "Tente novamente.",
           variant: "destructive",
         })
         setIsSubmitting(false)
@@ -174,8 +271,8 @@ export default function CheckoutPage() {
         return
       }
 
-      if (!pixData.qr_code || !pixData.qr_code_base64) {
-        console.error('QR Code não encontrado na resposta:', pixData)
+      if (!paymentData.qr_code || !paymentData.qr_code_base64) {
+        console.error('QR Code não encontrado na resposta:', paymentData)
         toast({
           title: "Erro ao gerar QR Code",
           description: "Não foi possível gerar o QR Code PIX. Tente novamente.",
@@ -187,8 +284,9 @@ export default function CheckoutPage() {
       }
 
       // 2. Exiba o QR Code para o cliente
-      setPixQrCode(pixData.qr_code_base64)
-      setPixCode(pixData.qr_code)
+      setPixQrCode(paymentData.qr_code_base64)
+      setPixCode(paymentData.qr_code)
+      setPaymentId(paymentData.id)
       setIsProcessingOrder(false)
       setIsSubmitting(false)
 
@@ -205,65 +303,6 @@ export default function CheckoutPage() {
         title: "Erro ao processar pedido",
         description: "Ocorreu um erro ao processar seu pedido. Tente novamente.",
         variant: "destructive",
-      })
-    }
-  }
-
-  const handlePixPaid = async () => {
-    try {
-      // Gerar ID do pedido no formato ORD-XXXXX
-      const orderNumber = Math.floor(10000 + Math.random() * 90000).toString()
-      const orderId = `ORD-${orderNumber}`
-
-      // Preparar dados do pedido
-      const orderData = {
-        id: orderId,
-        userId: isAuthenticated ? user?.id : null,
-        user: {
-          name: isAuthenticated ? user?.name : form.getValues("name"),
-          phone: isAuthenticated ? user?.phone : form.getValues("phone"),
-          email: user?.email || null
-        },
-        type: form.getValues("deliveryMethod"),
-        status: "payment_pending",
-        delivery: form.getValues("deliveryMethod") === "delivery" ? {
-          address: `${form.getValues("streetName")}, ${form.getValues("number")}${form.getValues("complement") ? ` - ${form.getValues("complement")}` : ''}`,
-          time: null
-        } : null,
-        items: cart,
-        payment: {
-          method: "pix",
-          total: total,
-          status: "pending",
-          pixCode: pixCode
-        },
-        notes: form.getValues("notes"),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        statusHistory: {
-          payment_pending: serverTimestamp()
-        }
-      }
-
-      // Salvar pedido no Firebase
-      const orderRef = await addDoc(collection(db, "orders"), orderData)
-      
-      console.log("Pedido salvo com sucesso:", orderRef.id)
-      
-      setIsPixPaid(true)
-      clearCart()
-      toast({
-        title: "Pagamento confirmado!",
-        description: "Seu pedido foi recebido e está sendo processado.",
-        variant: "success"
-      })
-      router.push("/pedido-confirmado")
-    } catch (error) {
-      console.error("Erro ao salvar pedido:", error)
-      toast({
-        title: "Erro ao confirmar pedido",
-        description: "Ocorreu um erro ao salvar seu pedido. Por favor, tente novamente.",
-        variant: "destructive"
       })
     }
   }
@@ -447,6 +486,19 @@ export default function CheckoutPage() {
                         />
                         <FormField
                           control={form.control}
+                          name="email"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Email *</FormLabel>
+                              <FormControl>
+                                <Input placeholder="seu@email.com" className="rounded-none" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
                           name="phone"
                           render={({ field }) => (
                             <FormItem>
@@ -468,6 +520,34 @@ export default function CheckoutPage() {
                       <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
                         <MapPin className="h-5 w-5 text-primary" /> Endereço de Entrega
                       </h3>
+                      {isAuthenticated && addresses.length > 0 && (
+                        <div className="mb-4">
+                          <FormLabel>Endereços Salvos</FormLabel>
+                          <Select onValueChange={(value) => {
+                            const selectedAddress = addresses.find(addr => addr.id === value);
+                            if (selectedAddress) {
+                              form.setValue("streetName", selectedAddress.street || "");
+                              form.setValue("postalCode", selectedAddress.zipcode || "");
+                              form.setValue("number", selectedAddress.number || "");
+                              form.setValue("complement", selectedAddress.complement || "");
+                              form.setValue("referencePoint", selectedAddress.neighborhood || ""); // Assuming neighborhood can be used as reference or add a new field in type
+                              // Note: The Address type in auth-context does not have referencePoint. You might need to update it.
+                            }
+                          }} value={form.getValues("streetName") ? "custom" : ""}  >
+                            <SelectTrigger className="rounded-none">
+                              <SelectValue placeholder="Selecione um endereço salvo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                               <SelectItem value="custom">Inserir novo endereço</SelectItem>
+                              {addresses.map(address => (
+                                <SelectItem key={address.id} value={address.id}>
+                                  {address.street}, {address.number} - {address.neighborhood}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           control={form.control}
@@ -730,25 +810,18 @@ export default function CheckoutPage() {
                   <p>1. Abra o app do seu banco</p>
                   <p>2. Escaneie o QR Code ou cole o código</p>
                   <p>3. Confirme as informações e pague</p>
-                  <p>4. Clique em "Já paguei" abaixo</p>
+                  <p>4. A tela fechará automaticamente após a confirmação</p>
                 </div>
 
-                <div className="flex gap-4">
+                <div className="flex justify-center">
                   <Button
-                    variant="outline"
-                    className="flex-1"
                     onClick={() => {
                       setPixQrCode(null)
                       setPixCode(null)
+                      setPaymentId(null)
                     }}
                   >
-                    Cancelar
-                  </Button>
-                  <Button
-                    className="flex-1 bg-primary hover:bg-primary/90"
-                    onClick={handlePixPaid}
-                  >
-                    Já paguei
+                    Fechar
                   </Button>
                 </div>
               </div>

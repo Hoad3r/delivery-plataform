@@ -3,7 +3,7 @@ import { db } from "@/lib/firebase"
 import { doc, updateDoc, getDoc } from "firebase/firestore"
 
 // Development configuration - Replace with environment variables in production
-const MERCADO_PAGO_ACCESS_TOKEN = "TEST-5338159686365370-050721-a76b211a4d715cd281995e4002b62d84-187235033"
+const MERCADO_PAGO_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || "APP_USR-721729075084348-052314-ad2b42577bce8156b706c8443515b8ff-811759623"
 
 // Evolution API configuration - Uncomment when ready to implement
 /*
