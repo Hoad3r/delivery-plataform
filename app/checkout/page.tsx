@@ -31,7 +31,7 @@ import { useAuth } from "@/context/auth-context"
 import { formatCurrency } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, serverTimestamp, getDocs, query, doc, updateDoc } from "firebase/firestore"
+import { collection, addDoc, serverTimestamp, getDocs, query, doc, updateDoc, getDoc } from "firebase/firestore"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Define validation schema
@@ -212,21 +212,32 @@ export default function CheckoutPage() {
       // Save address if authenticated, delivery is selected, and saveAddress is checked
       if (isAuthenticated && user?.id && values.deliveryMethod === "delivery" && values.saveAddress) {
         try {
-          // Use the addAddress function from auth context
-          await addAddress({
-            street: values.streetName || "",
-            zipcode: values.postalCode || "",
-            number: values.number || "",
-            complement: values.complement || "",
-            neighborhood: values.referencePoint || "",
-            city: "",
-            state: "",
-            nickname: "Endereço de Entrega"
-          });
-          console.log("Address saved successfully!");
+          const userRef = doc(db, 'users', user.id);
+          const userDoc = await getDoc(userRef);
+          
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const addresses = userData.addresses || [];
+            
+            // Add new address
+            addresses.push({
+              street: values.streetName,
+              zipcode: values.postalCode,
+              number: values.number,
+              complement: values.complement || '',
+              neighborhood: values.referencePoint || '',
+              city: '',
+              state: '',
+              nickname: 'Endereço de Entrega'
+            });
+
+            // Update user document with new address
+            await updateDoc(userRef, {
+              addresses: addresses
+            });
+          }
         } catch (error) {
           console.error("Error saving address:", error);
-          // Optionally inform the user that the address could not be saved
           toast({
             title: "Erro ao salvar endereço",
             description: "Não foi possível salvar o endereço para uso futuro.",
@@ -235,17 +246,61 @@ export default function CheckoutPage() {
         }
       }
 
-      console.log("Simulando chamada à API...")
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      // 1. Primeiro criar o pedido no Firestore
+      const orderId = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
+      const orderRef = collection(db, 'orders');
+      
+      const orderData = {
+        id: orderId,
+        userId: isAuthenticated ? user?.id : null,
+        user: {
+          name: isAuthenticated ? user?.name : values.name,
+          phone: isAuthenticated ? user?.phone : values.phone,
+          email: isAuthenticated ? user?.email : values.email
+        },
+        type: values.deliveryMethod,
+        status: 'payment_pending',
+        items: cart.map(item => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity || 1,
+          options: item.options || {}
+        })),
+        delivery: {
+          address: values.deliveryMethod === 'delivery' ? 
+            `${values.streetName}, ${values.number}${values.complement ? ` - ${values.complement}` : ''}${values.referencePoint ? ` (${values.referencePoint})` : ''}` : 
+            null,
+          time: values.deliveryMethod === 'delivery' ? '45 minutos' : '30 minutos'
+        },
+        payment: {
+          method: values.paymentMethod,
+          total: total,
+          status: 'pending'
+        },
+        notes: values.notes || '',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        statusHistory: {
+          payment_pending: {
+            timestamp: serverTimestamp(),
+            note: 'Pedido criado, aguardando pagamento'
+          }
+        }
+      };
 
-      // 1. Chame a API para gerar o pagamento PIX
+      // Salvar o pedido no Firestore
+      const newOrderRef = await addDoc(orderRef, orderData);
+      console.log("Pedido criado com sucesso:", newOrderRef.id);
+
+      // 2. Depois gerar o pagamento PIX
       const pixPayload = {
         amount: Number(total.toFixed(2)),
         description: `Pedido Nossa Cozinha - ${new Date().toLocaleDateString()}`,
-        orderId: `ORD-${Math.floor(10000 + Math.random() * 90000)}` // Generate a random 5-digit order number
+        orderId: orderId
       }
       
-      console.log("Payload PIX:", pixPayload)
+      console.log("Gerando pagamento PIX para o pedido:", orderId);
 
       const pixResponse = await fetch('/api/pix', {
         method: 'POST',
@@ -283,7 +338,7 @@ export default function CheckoutPage() {
         return
       }
 
-      // 2. Exiba o QR Code para o cliente
+      // 3. Exibir o QR Code para o cliente
       setPixQrCode(paymentData.qr_code_base64)
       setPixCode(paymentData.qr_code)
       setPaymentId(paymentData.id)
