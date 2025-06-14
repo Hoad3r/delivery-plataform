@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react"
 import { Dish, DishAvailability, Order, mockDishes, mockDishAvailability, mockOrders } from "@/lib/mock-data"
+import { collection, query, where, getDocs, doc, writeBatch, serverTimestamp } from "firebase/firestore"
+import { db } from "@/lib/firebase" // Assumindo que você tem um arquivo de configuração do Firebase em lib/firebase.ts ou .js
 
 interface MenuContextType {
   dishes: Dish[]
@@ -26,11 +28,25 @@ interface MenuContextType {
 const MenuContext = createContext<MenuContextType | undefined>(undefined)
 
 export function MenuProvider({ children }: { children: React.ReactNode }) {
-  const [dishes] = useState<Dish[]>(mockDishes)
+  const [dishes, setDishes] = useState<Dish[]>([])
   const [availability, setAvailability] = useState<DishAvailability[]>(mockDishAvailability)
   const [orders, setOrders] = useState<Order[]>(mockOrders)
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0])
   const [selectedPeriod, setSelectedPeriod] = useState<"morning" | "afternoon">("morning")
+
+  useEffect(() => {
+    const fetchDishes = async () => {
+      const q = query(collection(db, "dishes"), where("isAvailable", "==", true))
+      const querySnapshot = await getDocs(q)
+      const fetchedDishes: Dish[] = []
+      querySnapshot.forEach((doc) => {
+        fetchedDishes.push({ id: doc.id, ...doc.data() } as Dish)
+      })
+      setDishes(fetchedDishes)
+    }
+
+    fetchDishes()
+  }, [])
 
   // Atualizar disponibilidade quando a data ou período mudar
   useEffect(() => {
@@ -46,27 +62,20 @@ export function MenuProvider({ children }: { children: React.ReactNode }) {
     )
     
     if (!dishAvailability) {
-      // Se não houver disponibilidade para a data selecionada, criar uma nova
-      const newAvailability: DishAvailability = {
-        dishId,
-        date: selectedDate,
-        periods: {
-          morning: {
-            available: 20,
-            sold: 0,
-            maxQuantity: 20,
-            deliveryTime: { start: "11:00", end: "13:00" }
-          },
-          afternoon: {
-            available: 20,
-            sold: 0,
-            maxQuantity: 20,
-            deliveryTime: { start: "14:00", end: "16:00" }
-          }
-        }
+      // Se não houver disponibilidade para a data selecionada, retornar uma nova sem modificar o estado
+      const defaultAvailabilityPeriod = {
+        available: 20,
+        sold: 0,
+        maxQuantity: 20,
+        deliveryTime: { start: "11:00", end: "13:00" }
       }
-      setAvailability(prev => [...prev, newAvailability])
-      return newAvailability.periods[selectedPeriod]
+      // Retorna a disponibilidade padrão para o período selecionado
+      return selectedPeriod === "morning" ? defaultAvailabilityPeriod : {
+        available: 20,
+        sold: 0,
+        maxQuantity: 20,
+        deliveryTime: { start: "14:00", end: "16:00" }
+      }
     }
 
     return dishAvailability.periods[selectedPeriod]
