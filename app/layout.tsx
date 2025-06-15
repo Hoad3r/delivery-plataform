@@ -12,6 +12,12 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Nossa Cozinha - Delivery de Comida Refinada",
   description: "Experimente a melhor experiência gastronômica diretamente na sua casa",
+  verification: {
+    google: "aRb_ZPkMysh369ioUVJE61bp2SPfgDHrdOtY5bvwe6E"
+  },
+  icons: {
+    icon: '/favicon.ico'
+  }
 }
 
 export default function RootLayout({

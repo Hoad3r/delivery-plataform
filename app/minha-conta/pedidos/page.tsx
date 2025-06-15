@@ -127,8 +127,25 @@ export default function OrdersPage() {
         
         const querySnapshot = await getDocs(q)
         
+        // Buscar também pedidos pelo email
+        const emailQuery = query(
+          ordersRef,
+          where('user.email', '==', user.email),
+          orderBy('createdAt', 'desc')
+        )
+        
+        const emailSnapshot = await getDocs(emailQuery)
+        
         if (isMounted) {
-          const pedidosCarregados = querySnapshot.docs.map(doc => {
+          // Combinar resultados dos dois queries
+          const allDocs = [...querySnapshot.docs, ...emailSnapshot.docs]
+          
+          // Remover duplicatas baseado no docId
+          const uniqueDocs = allDocs.filter((doc, index, self) =>
+            index === self.findIndex((d) => d.id === doc.id)
+          )
+          
+          const pedidosCarregados = uniqueDocs.map(doc => {
             const data = doc.data()
             return {
               docId: doc.id,
@@ -181,7 +198,8 @@ export default function OrdersPage() {
       result = result.filter(
         (order) =>
           order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.items.some((item) => item.name.toLowerCase().includes(searchTerm.toLowerCase())),
+          order.items.some((item) => item.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (order.user?.email && order.user.email.toLowerCase().includes(searchTerm.toLowerCase()))
       )
     }
 
@@ -267,7 +285,7 @@ export default function OrdersPage() {
               <div className="flex-1">
                 <Input
                   type="text"
-                  placeholder="Buscar por número do pedido ou itens..."
+                  placeholder="Buscar por número do pedido, itens ou email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="rounded-none w-full"
@@ -507,7 +525,7 @@ export default function OrdersPage() {
                 <div>
                   <h4 className="font-medium mb-2">Forma de Pagamento</h4>
                   <p className="text-sm text-neutral-600">
-                    {paymentMethodTranslations[selectedOrder.payment.method]}{" "}
+                    {paymentMethodTranslations[selectedOrder.payment.method]} {" "}
                     {selectedOrder.payment.card && `(${selectedOrder.payment.card})`}
                   </p>
                 </div>
@@ -542,4 +560,3 @@ export default function OrdersPage() {
     </div>
   )
 }
-
