@@ -264,7 +264,9 @@ const processOrdersByMonth = (orders: any[]): OrderData[] => {
   orders.forEach(order => {
     if (!order.createdAt) return
     
-    const monthIndex = order.createdAt.getMonth()
+    // Converter a data ISO para objeto Date
+    const orderDate = new Date(order.createdAt)
+    const monthIndex = orderDate.getMonth()
     const month = months[monthIndex]
     
     monthMap[month].orders += 1
@@ -349,7 +351,9 @@ const processOrdersByTime = (orders: any[]): OrderByTime[] => {
   orders.forEach(order => {
     if (!order.createdAt) return
     
-    const hour = order.createdAt.getHours()
+    // Converter a data ISO para objeto Date
+    const orderDate = new Date(order.createdAt)
+    const hour = orderDate.getHours()
     
     if (hour >= 10 && hour < 12) timeSlots[0].orders++
     else if (hour >= 12 && hour < 14) timeSlots[1].orders++
@@ -362,30 +366,6 @@ const processOrdersByTime = (orders: any[]): OrderByTime[] => {
   return timeSlots
 }
 
-// Processar dados para pedidos por localização
-const processOrdersByLocation = (orders: any[]): OrderByLocation[] => {
-  // Objeto para armazenar contagem por bairro
-  const bairroCounts: Record<string, number> = {}
-  
-  orders.forEach(order => {
-    if (!order.delivery?.address) return
-    
-    // Usar a função otimizada para extrair bairro
-    const bairro = extractDistrictFromAddress(order.delivery.address);
-    
-    // Incrementa a contagem para este bairro
-    bairroCounts[bairro] = (bairroCounts[bairro] || 0) + 1;
-  })
-  
-  // Converter para o formato necessário para o gráfico
-  // E ordenar por número de pedidos (decrescente)
-  return Object.entries(bairroCounts)
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value)
-    // Limitando para os 5 principais bairros para melhor visualização
-    .slice(0, 5);
-}
-
 // Processar dados para pedidos por dia da semana
 const processWeeklyOrders = (orders: any[]): WeeklyOrder[] => {
   const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
@@ -394,7 +374,9 @@ const processWeeklyOrders = (orders: any[]): WeeklyOrder[] => {
   orders.forEach(order => {
     if (!order.createdAt) return
     
-    const dayIndex = order.createdAt.getDay()
+    // Converter a data ISO para objeto Date
+    const orderDate = new Date(order.createdAt)
+    const dayIndex = orderDate.getDay()
     dayCount[dayIndex].orders++
   })
   
@@ -418,8 +400,8 @@ const processDeliveryTimes = (orders: any[]): DeliveryTime[] => {
     
     if (preparingTime && deliveredTime) {
       // Converter para Date usando nossa função utilitária
-      const startTime = normalizeFirestoreDate(preparingTime);
-      const endTime = normalizeFirestoreDate(deliveredTime);
+      const startTime = new Date(preparingTime);
+      const endTime = new Date(deliveredTime);
       
       // Calcular diferença em minutos
       const diffMinutes = Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60));
@@ -465,11 +447,14 @@ const processRecentOrders = (orders: any[]): RecentOrder[] => {
   const processedOrders = orders
     .slice(0, 5) // Já está ordenado por data desc na consulta
     .map(order => {
+      // Converter a data ISO para objeto Date
+      const orderDate = order.createdAt ? new Date(order.createdAt) : new Date();
+      
       // Usamos docId para operações no Firestore, mas exibimos o id na UI
       const processedOrder = {
         id: order.id, // Usar o ID interno para exibição, não o docId
         customer: order.user?.name || "Cliente",
-        date: order.createdAt ? format(order.createdAt, "dd/MM/yyyy, HH:mm", { locale: ptBR }) : "",
+        date: format(orderDate, "dd/MM/yyyy, HH:mm", { locale: ptBR }),
         value: Number(order.payment?.total || 0),
         status: statusInfo[order.status as keyof typeof statusInfo]?.label || String(order.status)
       };
@@ -581,6 +566,30 @@ const calculateGrowth = (current: number, previous: number) => {
   if (previous === 0) return "0.0";
   return (((current - previous) / previous) * 100).toFixed(1);
 };
+
+// Processar dados para pedidos por localização
+const processOrdersByLocation = (orders: any[]): OrderByLocation[] => {
+  // Objeto para armazenar contagem por bairro
+  const bairroCounts: Record<string, number> = {}
+  
+  orders.forEach(order => {
+    if (!order.delivery?.address) return
+    
+    // Usar a função otimizada para extrair bairro
+    const bairro = extractDistrictFromAddress(order.delivery.address);
+    
+    // Incrementa a contagem para este bairro
+    bairroCounts[bairro] = (bairroCounts[bairro] || 0) + 1;
+  })
+  
+  // Converter para o formato necessário para o gráfico
+  // E ordenar por número de pedidos (decrescente)
+  return Object.entries(bairroCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+    // Limitando para os 5 principais bairros para melhor visualização
+    .slice(0, 5);
+}
 
 export default function AdminDashboard() {
   // Estado para armazenar o período selecionado
@@ -1567,13 +1576,13 @@ export default function AdminDashboard() {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent }: { name: string; percent: number }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"
                       nameKey="name"
                     >
-                      {ordersByLocation.map((entry, index) => (
+                      {ordersByLocation.map((entry: OrderByLocation, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>

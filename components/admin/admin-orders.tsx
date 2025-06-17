@@ -3,8 +3,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import {
   Search,
-  ChevronDown,
-  ChevronUp,
   Clock,
   CheckCircle,
   XCircle,
@@ -122,23 +120,13 @@ interface Order {
   statusHistory?: Record<string, any>;
 }
 
-type SortableKey = "createdAt" | "status" | "total";
-
-// Status order mapping
-const statusOrder = {
-  payment_pending: 1,
-  pending: 2,
-  preparing: 3,
-  delivering: 4,
-  delivered: 5,
-  cancelled: 6
-}
+type SortableKey = "createdAt" | "total";
 
 export default function AdminOrders() {
   const { toast } = useToast()
   const { user } = useAuth()
   const [orders, setOrders] = useState<Order[]>([])
-  const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
+  const [inputValue, setInputValue] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("all")
@@ -153,10 +141,7 @@ export default function AdminOrders() {
   const [loadingMore, setLoadingMore] = useState(false)
   const pageSize = 20 // Número de pedidos carregados por vez
   
-  // Estado para controlar o timer de debounce na busca
-  const [searchDebounceTimer, setSearchDebounceTimer] = useState<NodeJS.Timeout | null>(null)
-
-  // Carrega pedidos iniciais
+  // Carrega pedidos iniciais (apenas para orders)
   useEffect(() => {
     carregarPedidos(true)
   }, [statusFilter, dateFilter])
@@ -256,8 +241,8 @@ export default function AdminOrders() {
       
       // 7. Executar a consulta
       const q = query(ordersRef, ...queryConstraints)
-        const querySnapshot = await getDocs(q)
-        
+      const querySnapshot = await getDocs(q)
+      
       // 8. Salvar o último documento para próxima página
       const docs = querySnapshot.docs
       const lastDoc = docs[docs.length - 1]
@@ -268,159 +253,197 @@ export default function AdminOrders() {
       
       // 9. Processar os resultados
       const pedidosCarregados = docs.map(doc => {
-          const data = doc.data()
-          let createdAt: Date
+        const data = doc.data()
+        let createdAt = data.createdAt
+        
+        // Converter serverTimestamp para ISO string
+        if (createdAt && typeof createdAt.toDate === 'function') {
+          createdAt = createdAt.toDate().toISOString()
+        } else if (createdAt && typeof createdAt === 'object') {
+          // Se for um objeto Timestamp do Firestore
+          createdAt = new Date(createdAt.seconds * 1000).toISOString()
+        } else if (!createdAt) {
+          // Se não tiver data, usar a data atual
+          createdAt = new Date().toISOString()
+        }
 
-          if (data.createdAt?.toDate) {
-            createdAt = data.createdAt.toDate()
-          } else if (data.createdAt instanceof Date) {
-            createdAt = data.createdAt
-          } else if (typeof data.createdAt === 'string') {
-            createdAt = new Date(data.createdAt)
-          } else {
-            createdAt = new Date()
-          }
-
-          // Normaliza o status
+        // Normaliza o status
         let status = data.status || 'payment_pending'
-          if (status === 'processing') status = 'preparing'
-          if (status === 'canceled') status = 'cancelled'
+        if (status === 'processing') status = 'preparing'
+        if (status === 'canceled') status = 'cancelled'
 
-          const order = {
+        return {
           docId: doc.id,
           id: data.id || doc.id,
-            userId: data.userId || '',
-            user: data.user || { name: '', phone: '' },
-            type: data.type || 'delivery',
-            status: status as OrderStatus,
-            delivery: data.delivery || { address: '', time: null },
-            items: data.items || [],
-            payment: data.payment || { method: 'cash', total: 0, status: 'pending' },
-            notes: data.notes || '',
-          createdAt: createdAt.toISOString(),
+          userId: data.userId || null,
+          user: data.user || {},
+          type: data.type || 'delivery',
+          status,
+          items: data.items || [],
+          delivery: data.delivery || {},
+          payment: data.payment || {},
+          notes: data.notes || '',
+          createdAt,
+          updatedAt: data.updatedAt || createdAt,
           statusHistory: data.statusHistory || {}
-          }
+        } as Order
+      })
 
-          return order as unknown as Order
-        })
-
-      // 10. Atualizar o estado
+      // 10. Atualizar o estado (apenas orders)
       if (reset) {
-        // Resetar lista se for carregamento inicial
         setOrders(pedidosCarregados)
-        setFilteredOrders(pedidosCarregados)
       } else {
-        // Adicionar à lista existente se estiver carregando mais
         setOrders(prev => [...prev, ...pedidosCarregados])
-        setFilteredOrders(prev => [...prev, ...pedidosCarregados])
       }
       
       console.log(`Carregados ${pedidosCarregados.length} pedidos. Há mais? ${hasMore}`)
-      } catch (error) {
-        console.error('Erro ao carregar pedidos:', error)
-        toast({
-          title: "Erro",
-          description: "Não foi possível carregar os pedidos.",
-          variant: "destructive",
-        })
+    } catch (error) {
+      console.error('Erro ao carregar pedidos:', error)
+      toast({
+        title: "Erro ao carregar pedidos",
+        description: "Não foi possível carregar os pedidos. Tente novamente mais tarde.",
+        variant: "destructive",
+      })
     } finally {
-        setIsLoading(false)
+      setIsLoading(false)
       setLoadingMore(false)
     }
-  }, [statusFilter, dateFilter, lastVisible, pageSize, toast])
+  }, [statusFilter, dateFilter, lastVisible, hasMore, loadingMore, pageSize, toast])
 
-  // Handle search com debounce para evitar múltiplas filtragens durante digitação
-  const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const term = e.target.value.toLowerCase()
-    setSearchTerm(term)
-    
-    // Limpar timer anterior se existir
-    if (searchDebounceTimer) {
-      clearTimeout(searchDebounceTimer)
-  }
-
-    // Configurar novo timer de debounce (300ms)
-    const newTimer = setTimeout(() => {
-      if (term === '') {
-        setFilteredOrders(orders)
-        return
-      }
-      
-      const filtered = orders.filter(
-        (order) =>
-          order.id.toLowerCase().includes(term) ||
-          order.user.name.toLowerCase().includes(term) ||
-          order.user.phone.toLowerCase().includes(term)
-      )
-      
-      setFilteredOrders(filtered)
-    }, 300)
-    
-    setSearchDebounceTimer(newTimer)
-  }, [orders, searchDebounceTimer])
-
-  // Limpar o timer de debounce quando o componente desmontar
+  // Adicionar useEffect para debounce
   useEffect(() => {
-    return () => {
-      if (searchDebounceTimer) {
-        clearTimeout(searchDebounceTimer)
-      }
-    }
-  }, [searchDebounceTimer])
+    const timer = setTimeout(() => {
+      setSearchTerm(inputValue)
+    }, 500) // 500ms de debounce
 
+    return () => clearTimeout(timer)
+  }, [inputValue])
+
+  // Atualizar handleSearch para usar inputValue
+  const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value)
+  }, [])
+
+  // Handle status filter
   const handleStatusFilter = useCallback((value: string) => {
-    setStatusFilter(value)
-    // Quando o status muda, resetamos para carregar novos pedidos
-    setLastVisible(null)
-    setHasMore(true)
-  }, [])
+    setStatusFilter(value);
+    setLastVisible(null); // Resetar paginação ao mudar filtro
+    setHasMore(true);
+  }, []);
 
+  // Handle date filter
   const handleDateFilter = useCallback((value: string) => {
-    setDateFilter(value)
-    // Quando a data muda, resetamos para carregar novos pedidos
-    setLastVisible(null)
-    setHasMore(true)
-  }, [])
+    setDateFilter(value);
+    setLastVisible(null); // Resetar paginação ao mudar filtro
+    setHasMore(true);
+  }, []);
 
-  // Handle sorting com useCallback
+  // Refatorar requestSort para atualizar apenas sortConfig
   const requestSort = useCallback((key: SortableKey) => {
     let direction: "asc" | "desc" = "asc"
     if (sortConfig.key === key && sortConfig.direction === "asc") {
       direction = "desc"
     }
     setSortConfig({ key, direction })
+  }, [sortConfig])
 
-    const sortedOrders = [...filteredOrders].sort((a, b) => {
-      // Tratar especificamente o caso do "total" que está dentro de payment
-      let aValue, bValue;
-      
-      if (key === "total") {
-        aValue = a.payment.total;
-        bValue = b.payment.total;
-      } else {
-        aValue = a[key as keyof Order];
-        bValue = b[key as keyof Order];
-      }
-      
-      // Lidar com valores undefined
-      if (aValue === undefined && bValue === undefined) return 0
-      if (aValue === undefined) return direction === "asc" ? -1 : 1
-      if (bValue === undefined) return direction === "asc" ? 1 : -1
-      
-      if (aValue < bValue) {
-        return direction === "asc" ? -1 : 1
-      }
-      if (aValue > bValue) {
-        return direction === "asc" ? 1 : -1
-      }
-      return 0
-    })
+  // displayedOrders agora é um useMemo que filtra e ordena orders
+  const displayedOrders = useMemo(() => {
+    let currentOrders = [...orders];
 
-    setFilteredOrders(sortedOrders)
-  }, [filteredOrders, sortConfig])
+    // 1. Aplicar filtro de busca
+    if (searchTerm.trim()) {
+      const lowerCaseSearchTerm = searchTerm.toLowerCase();
+      currentOrders = currentOrders.filter(order =>
+        order.id.toLowerCase().includes(lowerCaseSearchTerm) ||
+        order.user.name.toLowerCase().includes(lowerCaseSearchTerm) ||
+        order.user.phone.toLowerCase().includes(lowerCaseSearchTerm) ||
+        order.items.some(item => item.name.toLowerCase().includes(lowerCaseSearchTerm))
+      );
+    }
+
+    // 2. Aplicar filtro de status (se houver)
+    if (statusFilter !== "all") {
+      currentOrders = currentOrders.filter(order => order.status === statusFilter);
+    }
+
+    // 3. Aplicar filtro de data (se houver)
+    if (dateFilter !== "all") {
+      const now = new Date();
+      currentOrders = currentOrders.filter(order => {
+        const orderDate = new Date(order.createdAt);
+        if (dateFilter === "today") {
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          return orderDate >= today && orderDate < tomorrow;
+        } else if (dateFilter === "yesterday") {
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          return orderDate >= yesterday && orderDate < today;
+        } else if (dateFilter === "week") {
+          const weekAgo = new Date(now);
+          weekAgo.setDate(now.getDate() - 7);
+          return orderDate >= weekAgo && orderDate <= now;
+        } else if (dateFilter === "month") {
+          const monthAgo = new Date(now);
+          monthAgo.setMonth(now.getMonth() - 1);
+          return orderDate >= monthAgo && orderDate <= now;
+        }
+        return true; // Para o caso 'all' ou outro valor não tratado
+      });
+    }
+
+    // 4. Aplicar ordenação
+    if (sortConfig.key) {
+      currentOrders.sort((a, b) => {
+        let aValue: any, bValue: any;
+
+        if (sortConfig.key === "total") {
+          aValue = a.payment.total;
+          bValue = b.payment.total;
+          console.log('Ordenando por total:', { 
+            aId: a.id, 
+            aTotal: aValue, 
+            bId: b.id, 
+            bTotal: bValue 
+          })
+        } else if (sortConfig.key === "createdAt") {
+          aValue = new Date(a.createdAt).getTime();
+          bValue = new Date(b.createdAt).getTime();
+          console.log('Comparando datas:', {
+            aId: a.id,
+            aDate: a.createdAt,
+            aTimestamp: aValue,
+            bId: b.id,
+            bDate: b.createdAt,
+            bTimestamp: bValue
+          });
+        }
+
+        // Lidar com valores undefined
+        if (aValue === undefined && bValue === undefined) return 0;
+        if (aValue === undefined) return sortConfig.direction === "asc" ? -1 : 1;
+        if (bValue === undefined) return sortConfig.direction === "asc" ? 1 : -1;
+        
+        const comparison = aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+        return sortConfig.direction === "asc" ? comparison : -comparison;
+      });
+    }
+
+    console.log('Primeiros 10 pedidos exibidos (após filtro e ordenação):', currentOrders.slice(0, 10).map(order => ({
+      id: order.id,
+      createdAt: order.createdAt,
+      total: order.payment.total,
+      status: order.status
+    })));
+
+    return currentOrders;
+  }, [orders, searchTerm, statusFilter, dateFilter, sortConfig]);
 
   // Função para salvar uma nova ordem com useCallback
-  const saveOrder = useCallback(async (order: Order) => {
+  const saveOrder = useCallback(async (order: Partial<Order>) => {
     try {
       const ordersRef = collection(db, "orders")
       await addDoc(ordersRef, order)
@@ -429,15 +452,16 @@ export default function AdminOrders() {
         title: "Pedido salvo",
         description: `Pedido ${order.id} foi salvo com sucesso!`,
       })
+      carregarPedidos(true) // Recarrega os pedidos para incluir o novo
     } catch (error) {
       console.error("Erro ao salvar pedido:", error)
       toast({
-        title: "Erro ao salvar",
-        description: "Não foi possível salvar o pedido. Tente novamente.",
+        title: "Erro",
+        description: "Não foi possível salvar o pedido.",
         variant: "destructive",
       })
     }
-  }, [toast])
+  }, [carregarPedidos, toast])
 
   // Atualiza o status do pedido - versão melhorada com useCallback
   const updateOrderStatus = useCallback(async (orderDocId: string, newStatus: OrderStatus) => {
@@ -549,12 +573,6 @@ export default function AdminOrders() {
 
       // Atualizar os arrays de pedidos
       setOrders(prevOrders =>
-        prevOrders.map(order =>
-          order.docId === orderDocId ? { ...order, status: newStatus } : order
-        )
-      )
-
-      setFilteredOrders(prevOrders =>
         prevOrders.map(order =>
           order.docId === orderDocId ? { ...order, status: newStatus } : order
         )
@@ -789,32 +807,7 @@ export default function AdminOrders() {
     return timeline;
   }, []);
 
-  // Memoizar a lista filtrada de pedidos com base em orders e searchTerm
-  const memoizedFilteredOrders = useMemo(() => {
-    // Se estiver carregando, retornar o estado atual
-    if (isLoading || loadingMore) return filteredOrders;
-    
-    // Se não houver termo de busca, retornar todos os pedidos
-    if (!searchTerm.trim()) return filteredOrders;
-    
-    // Filtrar os pedidos com base no termo de busca
-    return orders.filter(
-      (order) =>
-        order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.user.phone.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [orders, searchTerm, isLoading, loadingMore, filteredOrders]);
-
   // Usar o valor memoizado na renderização
-  useEffect(() => {
-    if (!isLoading && !loadingMore && searchTerm.trim() === '') {
-      setFilteredOrders(orders);
-    } else if (!isLoading && !loadingMore) {
-      setFilteredOrders(memoizedFilteredOrders);
-    }
-  }, [memoizedFilteredOrders, orders, isLoading, loadingMore, searchTerm]);
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-4 justify-between">
@@ -823,7 +816,7 @@ export default function AdminOrders() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-500" />
             <Input
               placeholder="Buscar por ID, cliente ou telefone..."
-              value={searchTerm}
+              value={inputValue}
               onChange={handleSearch}
               className="pl-10 rounded-none"
             />
@@ -867,7 +860,7 @@ export default function AdminOrders() {
       <Card>
         <CardHeader className="pb-0">
           <CardTitle>Gerenciamento de Pedidos</CardTitle>
-          <CardDescription>{filteredOrders.length} pedidos encontrados</CardDescription>
+          <CardDescription>{displayedOrders.length} pedidos encontrados</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -886,35 +879,15 @@ export default function AdminOrders() {
                     <th className="text-left py-3 px-4 font-medium">
                       <div className="flex items-center cursor-pointer" onClick={() => requestSort("createdAt")}>
                         Data
-                        {sortConfig.key === "createdAt" &&
-                          (sortConfig.direction === "asc" ? (
-                            <ChevronUp className="h-4 w-4 ml-1" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 ml-1" />
-                          ))}
                       </div>
                     </th>
                     <th className="text-left py-3 px-4 font-medium">
                       <div className="flex items-center cursor-pointer" onClick={() => requestSort("total")}>
                         Valor
-                        {sortConfig.key === "total" &&
-                          (sortConfig.direction === "asc" ? (
-                            <ChevronUp className="h-4 w-4 ml-1" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 ml-1" />
-                          ))}
                       </div>
                     </th>
                     <th className="text-left py-3 px-4 font-medium">
-                      <div className="flex items-center cursor-pointer" onClick={() => requestSort("status")}>
-                        Status
-                        {sortConfig.key === "status" &&
-                          (sortConfig.direction === "asc" ? (
-                            <ChevronUp className="h-4 w-4 ml-1" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 ml-1" />
-                          ))}
-                      </div>
+                      Status
                     </th>
                     <th className="text-left py-3 px-4 font-medium">Pagamento</th>
                     <th className="text-left py-3 px-4 font-medium">Entrega</th>
@@ -922,15 +895,15 @@ export default function AdminOrders() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredOrders.length === 0 ? (
+                  {displayedOrders.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="text-center py-8 text-neutral-500">
                         Nenhum pedido encontrado com os filtros selecionados.
                       </td>
                     </tr>
                   ) : (
-                    filteredOrders.map((order) => (
-                      <tr key={order.id} className="border-b hover:bg-neutral-50">
+                    displayedOrders.map((order) => (
+                      <tr key={order.docId} className="border-b hover:bg-neutral-50">
                         <td className="py-3 px-4 font-medium">{order.id}</td>
                         <td className="py-3 px-4">
                           <div>{order.user.name}</div>

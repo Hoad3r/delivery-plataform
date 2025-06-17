@@ -7,7 +7,7 @@ import { useAuth } from "@/context/auth-context"
 import AdminDishList from "@/components/admin/admin-dish-list"
 import AdminAddDish from "@/components/admin/admin-add-dish"
 import AdminDashboard from "@/components/admin/admin-dashboard"
-import AdminOrders from "../../components/admin/admin-orders"
+import AdminOrders from "@/components/admin/admin-orders"
 
 export default function AdminPage() {
   const { user, logout } = useAuth()
@@ -71,6 +71,6 @@ export default function AdminPage() {
           <AdminAddDish />
         </TabsContent>
       </Tabs>
-    </div>
-  )
+    </div>
+  )
 }
