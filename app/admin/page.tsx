@@ -7,8 +7,7 @@ import { useAuth } from "@/context/auth-context"
 import AdminDishList from "@/components/admin/admin-dish-list"
 import AdminAddDish from "@/components/admin/admin-add-dish"
 import AdminDashboard from "@/components/admin/admin-dashboard"
-import AdminOrders from "@/components/admin/admin-orders"
-import AdminInventory from "@/components/admin/admin-inventory"
+import AdminOrders from "../../components/admin/admin-orders"
 
 export default function AdminPage() {
   const { user, logout } = useAuth()
@@ -41,15 +40,12 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList className="grid grid-cols-5 mb-6 md:mb-8 h-auto">
+        <TabsList className="grid grid-cols-4 mb-6 md:mb-8 h-auto">
           <TabsTrigger value="dashboard" className="text-xs md:text-sm py-2 px-1 md:py-3 md:px-4">
             Dashboard
           </TabsTrigger>
           <TabsTrigger value="orders" className="text-xs md:text-sm py-2 px-1 md:py-3 md:px-4">
             Pedidos
-          </TabsTrigger>
-          <TabsTrigger value="inventory" className="text-xs md:text-sm py-2 px-1 md:py-3 md:px-4">
-            Estoque
           </TabsTrigger>
           <TabsTrigger value="dishes" className="text-xs md:text-sm py-2 px-1 md:py-3 md:px-4">
             Pratos
@@ -67,10 +63,6 @@ export default function AdminPage() {
           <AdminOrders />
         </TabsContent>
 
-        <TabsContent value="inventory">
-          <AdminInventory />
-        </TabsContent>
-
         <TabsContent value="dishes">
           <AdminDishList />
         </TabsContent>
@@ -79,7 +71,6 @@ export default function AdminPage() {
           <AdminAddDish />
         </TabsContent>
       </Tabs>
-    </div>
-  )
+    </div>
+  )
 }
-

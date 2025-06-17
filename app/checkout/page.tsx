@@ -279,7 +279,7 @@ export default function CheckoutPage() {
           status: 'pending'
         },
         notes: values.notes || '',
-        createdAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
         updatedAt: serverTimestamp(),
         statusHistory: {
           payment_pending: {

@@ -80,6 +80,7 @@ const formatDate = (dateString: string | number | Date) => {
 interface User {
   name: string;
   phone: string;
+  email?: string;
 }
 
 interface OrderItem {
@@ -457,9 +458,7 @@ export default function AdminOrders() {
       await updateDoc(orderRef, updateData)
 
       // Após atualizar, recarregue o pedido para ter os dados atualizados
-      // incluindo o histórico de status
       if (selectedOrder && selectedOrder.docId === orderDocId) {
-        // Recarregar o pedido específico com dados atualizados
         try {
           const updatedOrderDoc = await getDoc(orderRef);
           if (updatedOrderDoc.exists()) {
@@ -474,7 +473,74 @@ export default function AdminOrders() {
             };
             
             setSelectedOrder(updatedOrder);
-            console.log("Pedido selecionado atualizado com histórico:", updatedOrder);
+            console.log("Pedido atualizado:", updatedOrder);
+
+            // Enviar email de atualização de status
+            const customerEmail = updatedOrder.user.email;
+            
+            if (customerEmail) {
+              try {
+                const response = await fetch('/api/send-email', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    to: customerEmail,
+                    subject: `Atualização do Pedido #${updatedOrder.id}`,
+                    html: `
+                      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+                        <h2 style="color: #333; text-align: center;">Olá ${updatedOrder.user.name}!</h2>
+                        <p style="font-size: 16px;">Seu pedido #${updatedOrder.id} foi atualizado para: <strong>${statusInfo[newStatus].label}</strong></p>
+                        
+                        <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                          <h3 style="color: #1e293b; margin-top: 0;">Detalhes do pedido:</h3>
+                          <ul style="list-style: none; padding: 0;">
+                            ${updatedOrder.items.map(item => `
+                              <li style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
+                                ${item.quantity}x ${item.name} - R$ ${(item.price * item.quantity).toFixed(2)}
+                              </li>
+                            `).join('')}
+                          </ul>
+                        </div>
+
+                        <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                          <p style="margin: 5px 0;"><strong>Total do pedido:</strong> R$ ${updatedOrder.payment.total.toFixed(2)}</p>
+                          <p style="margin: 5px 0;"><strong>Método de pagamento:</strong> ${paymentMethodInfo[updatedOrder.payment.method].label}</p>
+                          <p style="margin: 5px 0;"><strong>Método de entrega:</strong> ${updatedOrder.type === 'delivery' ? 'Entrega' : 'Retirada'}</p>
+                          ${updatedOrder.notes ? `<p style="margin: 5px 0;"><strong>Observações:</strong> ${updatedOrder.notes}</p>` : ''}
+                        </div>
+
+                        <p style="text-align: center; color: #64748b; font-size: 14px;">Agradecemos a preferência!</p>
+                        <p style="text-align: center; color: #64748b; font-size: 14px;">Nossa Cozinha</p>
+                      </div>
+                    `
+                  }),
+                });
+
+                if (!response.ok) {
+                  throw new Error('Falha ao enviar email');
+                }
+
+                toast({
+                  title: "Email enviado",
+                  description: "O cliente foi notificado sobre a atualização do status.",
+                });
+              } catch (error) {
+                console.error('Erro ao enviar email:', error);
+                toast({
+                  title: "Aviso",
+                  description: "O status foi atualizado, mas houve um erro ao enviar o email.",
+                  variant: "destructive",
+                });
+              }
+            } else {
+              console.log('Cliente não possui email cadastrado');
+              toast({
+                title: "Aviso",
+                description: "O status foi atualizado, mas o cliente não possui email cadastrado.",
+              });
+            }
           }
         } catch (error) {
           console.error("Erro ao recarregar pedido atualizado:", error);
@@ -514,7 +580,7 @@ export default function AdminOrders() {
   }, [selectedOrder, statusFilter, carregarPedidos, toast])
 
   // Corrigir a função handleStatusChange para usar o docId diretamente e usar useCallback
-  const handleStatusChange = useCallback((orderId: string, newStatus: OrderStatus) => {
+  const handleStatusChange = useCallback(async (orderId: string, newStatus: OrderStatus) => {
     // Log para debug
     console.log(`Tentando alterar status do pedido ID: ${orderId} para ${newStatus}`);
     
@@ -542,8 +608,84 @@ export default function AdminOrders() {
     }
     
     console.log(`DocId encontrado: ${pedido.docId}. Atualizando status...`);
-    updateOrderStatus(pedido.docId, newStatus);
-  }, [orders, updateOrderStatus, toast])
+    
+    try {
+      // Atualizar o status no banco
+      await updateOrderStatus(pedido.docId, newStatus);
+
+      // Enviar email de atualização
+      if (pedido.user.email) {
+        try {
+          const response = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              to: pedido.user.email,
+              subject: `Atualização do Pedido #${pedido.id}`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+                  <h2 style="color: #333; text-align: center;">Olá ${pedido.user.name}!</h2>
+                  <p style="font-size: 16px;">Seu pedido #${pedido.id} foi atualizado para: <strong>${statusInfo[newStatus].label}</strong></p>
+                  
+                  <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <h3 style="color: #1e293b; margin-top: 0;">Detalhes do pedido:</h3>
+                    <ul style="list-style: none; padding: 0;">
+                      ${pedido.items.map(item => `
+                        <li style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
+                          ${item.quantity}x ${item.name} - R$ ${(item.price * item.quantity).toFixed(2)}
+                        </li>
+                      `).join('')}
+                    </ul>
+                  </div>
+
+                  <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <p style="margin: 5px 0;"><strong>Total do pedido:</strong> R$ ${pedido.payment.total.toFixed(2)}</p>
+                    <p style="margin: 5px 0;"><strong>Método de pagamento:</strong> ${paymentMethodInfo[pedido.payment.method].label}</p>
+                    <p style="margin: 5px 0;"><strong>Método de entrega:</strong> ${pedido.type === 'delivery' ? 'Entrega' : 'Retirada'}</p>
+                    ${pedido.notes ? `<p style="margin: 5px 0;"><strong>Observações:</strong> ${pedido.notes}</p>` : ''}
+                  </div>
+
+                  <p style="text-align: center; color: #64748b; font-size: 14px;">Agradecemos a preferência!</p>
+                  <p style="text-align: center; color: #64748b; font-size: 14px;">Nossa Cozinha</p>
+                </div>
+              `
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Falha ao enviar email');
+          }
+
+          toast({
+            title: "Email enviado",
+            description: "O cliente foi notificado sobre a atualização do status.",
+          });
+        } catch (error) {
+          console.error('Erro ao enviar email:', error);
+          toast({
+            title: "Aviso",
+            description: "O status foi atualizado, mas houve um erro ao enviar o email.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        console.log('Cliente não possui email cadastrado');
+        toast({
+          title: "Aviso",
+          description: "O status foi atualizado, mas o cliente não possui email cadastrado.",
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar status:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar o status do pedido.",
+        variant: "destructive",
+      });
+    }
+  }, [orders, updateOrderStatus, toast]);
 
   // View order details com useCallback
   const viewOrderDetails = useCallback((order: Order) => {
