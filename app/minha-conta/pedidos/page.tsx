@@ -5,7 +5,7 @@ import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { useSearchParams } from "next/navigation"
-import { Download, Clock, Check, FileText, Calendar, Repeat, EyeIcon } from "lucide-react"
+import { Download, Clock, Check, FileText, Calendar, Repeat, EyeIcon, CreditCard } from "lucide-react"
 import { collection, addDoc, Timestamp, getDocs, query, where, orderBy } from "firebase/firestore"
 
 import { Button } from "@/components/ui/button"
@@ -158,8 +158,8 @@ export default function OrdersPage() {
               delivery: data.delivery,
               payment: data.payment,
               notes: data.notes || '',
-              createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-              updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+              createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt || new Date().toISOString(),
+              updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt || new Date().toISOString(),
               statusHistory: data.statusHistory || {}
             } as Order
           })
@@ -257,13 +257,11 @@ export default function OrdersPage() {
     }
   }
 
-  // Download order receipt (would be a PDF in a real app)
-  const handleDownloadReceipt = (orderId: string) => {
-    toast({
-      title: "Comprovante baixado",
-      description: "O comprovante do pedido foi baixado com sucesso.",
-      variant: "success"
-    })
+  // Função para lidar com o pagamento pendente
+  const handlePayment = (order: Order) => {
+    // Aqui você pode implementar a lógica de redirecionamento para a página de pagamento
+    // Por exemplo, usando o router do Next.js para redirecionar para a página de checkout com o ID do pedido
+    window.location.href = `/checkout?orderId=${order.docId}`
   }
 
   return (
@@ -367,7 +365,7 @@ export default function OrdersPage() {
           ) : (
             <div className="space-y-6">
               {filteredOrders.map((order) => (
-                <div key={order.id} className="border border-neutral-200 p-4">
+                <div key={order.docId} className="border border-neutral-200 p-4">
                   <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
                     <div>
                       <div className="flex items-center gap-2">
@@ -394,14 +392,16 @@ export default function OrdersPage() {
                         <EyeIcon className="h-4 w-4" />
                       </Button>
 
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => handleDownloadReceipt(order.id)}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
+                      {order.status === "payment_pending" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2 rounded-none"
+                          onClick={() => handlePayment(order)}
+                        >
+                          <CreditCard className="h-4 w-4 mr-1" /> Pagar
+                        </Button>
+                      )}
 
                       {order.status === "delivered" && (
                         <Button
@@ -532,13 +532,18 @@ export default function OrdersPage() {
               </div>
 
               <div className="flex justify-between">
-                <Button
-                  variant="outline"
-                  className="rounded-none"
-                  onClick={() => handleDownloadReceipt(selectedOrder.id)}
-                >
-                  <Download className="h-4 w-4 mr-1" /> Baixar Comprovante
-                </Button>
+                {selectedOrder.status === "payment_pending" && (
+                  <Button
+                    variant="outline"
+                    className="rounded-none"
+                    onClick={() => {
+                      handlePayment(selectedOrder)
+                      setOrderDetailsOpen(false)
+                    }}
+                  >
+                    <CreditCard className="h-4 w-4 mr-1" /> Efetuar Pagamento
+                  </Button>
+                )}
 
                 {selectedOrder.status === "delivered" && (
                   <Button
