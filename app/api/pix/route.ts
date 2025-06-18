@@ -40,6 +40,9 @@ export async function POST(request: Request) {
     // Gerar um ID único para a requisição (idempotência)
     const idempotencyKey = uuidv4()
 
+    console.log('🆔 Creating PIX payment for orderId:', orderId);
+    console.log('💰 Amount:', formattedAmount);
+
     const mercadopagoPayload = {
       transaction_amount: formattedAmount,
       description: description || 'Pedido Nossa Cozinha',
@@ -54,6 +57,8 @@ export async function POST(request: Request) {
       external_reference: orderId,
       statement_descriptor: 'Nossa Cozinha'
     }
+
+    console.log('📤 Mercado Pago payload:', mercadopagoPayload);
 
     try {
       // Criar o pagamento
@@ -99,6 +104,13 @@ export async function POST(request: Request) {
       }
 
       const paymentData = await paymentResponse.json()
+
+      console.log('📥 Mercado Pago response:', {
+        id: paymentData.id,
+        status: paymentData.status,
+        external_reference: paymentData.external_reference,
+        point_of_interaction: paymentData.point_of_interaction
+      });
 
       // Extrair dados do PIX da resposta
       const pixData = paymentData.point_of_interaction?.transaction_data

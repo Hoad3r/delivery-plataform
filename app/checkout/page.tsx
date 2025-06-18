@@ -118,21 +118,31 @@ export default function CheckoutPage() {
     let intervalId: NodeJS.Timeout | null = null;
 
     if (paymentId) {
+      console.log('🚀 Starting payment status polling for paymentId:', paymentId);
       intervalId = setInterval(async () => {
         try {
+          console.log('📡 Polling payment status...');
           const response = await fetch(`/api/mercadopago/status?id=${paymentId}`);
           const data = await response.json();
 
+          console.log('📊 Payment status response:', data);
+
           if (response.ok) {
-            console.log('Payment status check:', data.status);
+            console.log('✅ Payment status check:', data.status);
             if (data.status === 'approved') {
+              console.log('🎉 Payment approved! Updating order status...');
+              
               // Payment confirmed - Update order status in Firestore
               try {
                 // Get orderId from external_reference
                 const orderId = data.external_reference;
+                console.log('🔍 Order ID from external_reference:', orderId);
+                
                 if (orderId) {
+                  console.log('📝 Updating order in Firestore...');
                   const orderRef = doc(db, "orders", orderId);
-                  await updateDoc(orderRef, {
+                  
+                  const updateData = {
                     status: "pending",
                     payment: {
                       status: "approved",
@@ -147,14 +157,25 @@ export default function CheckoutPage() {
                         note: "Pagamento aprovado, pedido confirmado"
                       }
                     }
-                  });
-                  console.log('Order status updated to pending');
+                  };
+                  
+                  console.log('📋 Update data:', updateData);
+                  
+                  await updateDoc(orderRef, updateData);
+                  console.log('✅ Order status updated to pending successfully!');
+                } else {
+                  console.error('❌ No orderId found in external_reference');
                 }
               } catch (updateError) {
-                console.error('Error updating order status:', updateError);
+                console.error('❌ Error updating order status:', updateError);
+                console.error('❌ Error details:', {
+                  message: updateError instanceof Error ? updateError.message : 'Unknown error',
+                  stack: updateError instanceof Error ? updateError.stack : undefined
+                });
               }
 
               // Stop polling and redirect
+              console.log('🛑 Stopping polling and redirecting...');
               clearInterval(intervalId!);
               setPixQrCode(null);
               setPixCode(null);
@@ -169,6 +190,7 @@ export default function CheckoutPage() {
               });
               router.push("/pedido-confirmado");
             } else if (data.status === 'rejected' || data.status === 'cancelled') {
+              console.log('❌ Payment rejected or cancelled:', data.status);
               // Payment failed or cancelled
               clearInterval(intervalId!);
               setPixQrCode(null);
@@ -179,13 +201,15 @@ export default function CheckoutPage() {
                 description: "O pagamento foi rejeitado ou cancelado. Tente novamente.",
                 variant: "destructive"
               });
+            } else {
+              console.log('⏳ Payment still pending, status:', data.status);
             }
             // Keep polling for other statuses (pending, in_process, etc.)
           } else {
-            console.error('Error fetching payment status:', data);
+            console.error('❌ Error fetching payment status:', data);
           }
         } catch (error) {
-          console.error('Error during payment status polling:', error);
+          console.error('❌ Error during payment status polling:', error);
         }
       }, 5000); // Poll every 5 seconds
     }
@@ -193,6 +217,7 @@ export default function CheckoutPage() {
     // Cleanup interval on component unmount or when paymentId changes to null
     return () => {
       if (intervalId) {
+        console.log('🧹 Cleaning up polling interval');
         clearInterval(intervalId);
       }
     };
@@ -271,6 +296,8 @@ export default function CheckoutPage() {
 
       // 1. Primeiro criar o pedido no Firestore
       const orderId = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
+      console.log('🆔 Generated orderId:', orderId);
+      
       const orderRef = collection(db, 'orders');
       
       const orderData = {
@@ -312,9 +339,12 @@ export default function CheckoutPage() {
         }
       };
 
+      console.log('📋 Order data to save:', orderData);
+
       // Salvar o pedido no Firestore
       const newOrderRef = await addDoc(orderRef, orderData);
-      console.log("Pedido criado com sucesso:", newOrderRef.id);
+      console.log("✅ Pedido criado com sucesso no Firestore:", newOrderRef.id);
+      console.log("🆔 OrderId usado no PIX:", orderId);
 
       // 2. Depois gerar o pagamento PIX
       const pixPayload = {
