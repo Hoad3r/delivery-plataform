@@ -1,85 +1,38 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo, useCallback } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Trash2, Plus, Minus, ChevronLeft, ChevronRight, ShoppingBag } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { useCart } from "@/context/cart-context"
 import { motion } from "framer-motion"
 import { useRef } from "react"
 import { formatCurrency } from "@/lib/utils"
 import { useMenu } from "@/contexts/menu-context"
-import DatePeriodSelector from "@/components/date-period-selector"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
-import { toast } from "@/components/ui/use-toast"
-
-// Itens recomendados para o carrossel
-const recommendedItems = [
-  {
-    id: "rec1",
-    name: "Carpaccio de Wagyu",
-    description: "Finas fatias de wagyu, rúcula selvagem, lascas de parmesão e azeite trufado",
-    price: 58,
-    image: "/placeholder.svg?height=600&width=600",
-  },
-  {
-    id: "rec2",
-    name: "Burrata com Tomates",
-    description: "Burrata cremosa, tomates confitados, pesto de manjericão",
-    price: 52,
-    image: "/placeholder.svg?height=600&width=600",
-  },
-  {
-    id: "rec3",
-    name: "Risoto de Funghi",
-    description: "Arroz arbóreo, mix de cogumelos frescos, manteiga e parmesão",
-    price: 68,
-    image: "/placeholder.svg?height=600&width=600",
-  },
-  {
-    id: "rec4",
-    name: "Tiramisù",
-    description: "Clássico italiano com camadas de biscoito champagne, café e mascarpone",
-    price: 32,
-    image: "/placeholder.svg?height=600&width=600",
-  },
-  {
-    id: "rec5",
-    name: "Vinho Tinto Barolo",
-    description: "Barolo DOCG, Piemonte, Itália - Taça 150ml",
-    price: 45,
-    image: "/placeholder.svg?height=600&width=600",
-  },
-]
 
 export default function CartPage() {
   const { cart, updateItemQuantity, removeItem, clearCart, addItem } = useCart()
-  const [couponCode, setCouponCode] = useState("")
   const carouselRef = useRef<HTMLDivElement>(null)
-  const { selectedDate, selectedPeriod } = useMenu()
+  const { dishes } = useMenu()
   const router = useRouter()
 
-  const subtotal = cart.reduce((total, item) => total + item.price * item.quantity, 0)
-  const deliveryFee = 5.0
-  const total = subtotal + deliveryFee
+  // Otimizar cálculos com useMemo
+  const subtotal = useMemo(() => 
+    cart.reduce((total, item) => total + item.price * item.quantity, 0), 
+    [cart]
+  )
+  const total = subtotal
 
-  const handleFinishOrder = () => {
-    if (!selectedDate || !selectedPeriod) {
-      toast({
-        title: "Selecione a data e período",
-        description: "Por favor, selecione a data e período de entrega antes de continuar.",
-        variant: "destructive",
-      })
-      return
-    }
+  // Otimizar funções com useCallback
+  const handleFinishOrder = useCallback(() => {
     router.push("/checkout")
-  }
+  }, [router])
 
-  const scrollCarousel = (direction: "left" | "right") => {
+  const scrollCarousel = useCallback((direction: "left" | "right") => {
     if (!carouselRef.current) return
 
     const scrollAmount = 300
@@ -89,7 +42,13 @@ export default function CartPage() {
       left: direction === "left" ? currentScroll - scrollAmount : currentScroll + scrollAmount,
       behavior: "smooth",
     })
-  }
+  }, [])
+
+  // Otimizar filtro de pratos recomendados
+  const recommendedDishes = useMemo(() => {
+    if (!dishes || dishes.length === 0) return []
+    return dishes.filter((item: any) => !cart.some(cartItem => cartItem.id === item.id))
+  }, [dishes, cart])
 
   if (cart.length === 0) {
     return (
@@ -269,39 +228,26 @@ export default function CartPage() {
           <div className="lg:col-span-1">
             <Card>
               <CardHeader>
-                <CardTitle>Data e Período</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <DatePeriodSelector />
-              </CardContent>
-            </Card>
-
-            <Card className="mt-6">
-              <CardHeader>
                 <CardTitle>Resumo do Pedido</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal</span>
-                    <span>{formatCurrency(subtotal)}</span>
-                  </div>
-                <div className="flex justify-between text-sm">
-                  <span>Taxa de Entrega</span>
-                    <span>{formatCurrency(deliveryFee)}</span>
-                  </div>
+                  <span>{formatCurrency(subtotal)}</span>
+                </div>
                 <Separator />
                 <div className="flex justify-between font-medium">
-                    <span>Total</span>
-                    <span>{formatCurrency(total)}</span>
+                  <span>Total</span>
+                  <span>{formatCurrency(total)}</span>
                 </div>
               </CardContent>
               <CardFooter>
                   <Button
                   className="w-full bg-primary text-white hover:bg-primary/90"
                   onClick={handleFinishOrder}
-                  disabled={cart.length === 0 || !selectedDate || !selectedPeriod}
+                  disabled={cart.length === 0}
                   >
-                  Finalizar Agendamento
+                  Finalizar Pedido
                   </Button>
               </CardFooter>
             </Card>
@@ -341,7 +287,7 @@ export default function CartPage() {
                 className="flex overflow-x-auto scrollbar-hide gap-4 sm:gap-6 pb-4 scroll-smooth"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
-                {recommendedItems.map((item) => (
+                {recommendedDishes.length > 0 ? recommendedDishes.map((item: any) => (
                   <motion.div
                     key={item.id}
                     className="min-w-[200px] sm:min-w-[280px] max-w-[200px] sm:max-w-[280px] flex-shrink-0 group"
@@ -381,7 +327,9 @@ export default function CartPage() {
                       </div>
                     </div>
                   </motion.div>
-                ))}
+                )) : (
+                  <div className="text-neutral-500">Nenhum prato disponível no momento.</div>
+                )}
               </div>
             </div>
           </div>

@@ -60,6 +60,8 @@ const paymentMethodInfo = {
   debit: { label: "Cartão de Débito", icon: "💳" },
   pix: { label: "PIX", icon: "📱" },
   cash: { label: "Dinheiro", icon: "💵" },
+  // Fallback para métodos desconhecidos
+  unknown: { label: "Método Desconhecido", icon: "❓" },
 }
 
 // Format date
@@ -91,7 +93,7 @@ interface OrderItem {
 type PaymentStatus = "paid" | "pending" | "refunded";
 
 interface OrderPayment {
-  method: "pix" | "credit" | "debit" | "cash";
+  paymentMethod: "pix" | "credit" | "debit" | "cash";
   total: number;
   card?: string;
   status: PaymentStatus;
@@ -183,8 +185,6 @@ export default function AdminOrders() {
         
         queryConstraints.push(where('createdAt', '>=', todayISO))
         queryConstraints.push(where('createdAt', '<', tomorrowISO))
-        
-        console.log('Filtrando por hoje (ISO):', todayISO, 'até', tomorrowISO)
       } else if (dateFilter === "yesterday") {
         // Cria string ISO para início de ontem
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -197,8 +197,6 @@ export default function AdminOrders() {
         
         queryConstraints.push(where('createdAt', '>=', yesterdayISO))
         queryConstraints.push(where('createdAt', '<', todayISO))
-        
-        console.log('Filtrando por ontem (ISO):', yesterdayISO, 'até', todayISO)
       } else if (dateFilter === "week") {
         // Cria string ISO para 7 dias atrás
         const weekAgo = new Date(now)
@@ -210,8 +208,6 @@ export default function AdminOrders() {
         
         queryConstraints.push(where('createdAt', '>=', weekAgoISO))
         queryConstraints.push(where('createdAt', '<=', nowISO))
-        
-        console.log('Filtrando pela última semana (ISO):', weekAgoISO, 'até', nowISO)
       } else if (dateFilter === "month") {
         // Cria string ISO para 30 dias atrás
         const monthAgo = new Date(now)
@@ -223,8 +219,6 @@ export default function AdminOrders() {
         
         queryConstraints.push(where('createdAt', '>=', monthAgoISO))
         queryConstraints.push(where('createdAt', '<=', nowISO))
-        
-        console.log('Filtrando pelo último mês (ISO):', monthAgoISO, 'até', nowISO)
       }
       
       // 4. Adicionar ordenação (agora ordenando a string ISO, que funciona bem para datas)
@@ -296,7 +290,6 @@ export default function AdminOrders() {
         setOrders(prev => [...prev, ...pedidosCarregados])
       }
       
-      console.log(`Carregados ${pedidosCarregados.length} pedidos. Há mais? ${hasMore}`)
     } catch (error) {
       console.error('Erro ao carregar pedidos:', error)
       toast({
@@ -351,7 +344,7 @@ export default function AdminOrders() {
   const displayedOrders = useMemo(() => {
     let currentOrders = [...orders];
 
-    // 1. Aplicar filtro de busca
+    // 1. Aplicar filtro de busca (apenas busca por texto)
     if (searchTerm.trim()) {
       const lowerCaseSearchTerm = searchTerm.toLowerCase();
       currentOrders = currentOrders.filter(order =>
@@ -362,40 +355,7 @@ export default function AdminOrders() {
       );
     }
 
-    // 2. Aplicar filtro de status (se houver)
-    if (statusFilter !== "all") {
-      currentOrders = currentOrders.filter(order => order.status === statusFilter);
-    }
-
-    // 3. Aplicar filtro de data (se houver)
-    if (dateFilter !== "all") {
-      const now = new Date();
-      currentOrders = currentOrders.filter(order => {
-        const orderDate = new Date(order.createdAt);
-        if (dateFilter === "today") {
-          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          const tomorrow = new Date(today);
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          return orderDate >= today && orderDate < tomorrow;
-        } else if (dateFilter === "yesterday") {
-          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          const yesterday = new Date(today);
-          yesterday.setDate(yesterday.getDate() - 1);
-          return orderDate >= yesterday && orderDate < today;
-        } else if (dateFilter === "week") {
-          const weekAgo = new Date(now);
-          weekAgo.setDate(now.getDate() - 7);
-          return orderDate >= weekAgo && orderDate <= now;
-        } else if (dateFilter === "month") {
-          const monthAgo = new Date(now);
-          monthAgo.setMonth(now.getMonth() - 1);
-          return orderDate >= monthAgo && orderDate <= now;
-        }
-        return true; // Para o caso 'all' ou outro valor não tratado
-      });
-    }
-
-    // 4. Aplicar ordenação
+    // 2. Aplicar ordenação
     if (sortConfig.key) {
       currentOrders.sort((a, b) => {
         let aValue: any, bValue: any;
@@ -403,23 +363,9 @@ export default function AdminOrders() {
         if (sortConfig.key === "total") {
           aValue = a.payment.total;
           bValue = b.payment.total;
-          console.log('Ordenando por total:', { 
-            aId: a.id, 
-            aTotal: aValue, 
-            bId: b.id, 
-            bTotal: bValue 
-          })
         } else if (sortConfig.key === "createdAt") {
           aValue = new Date(a.createdAt).getTime();
           bValue = new Date(b.createdAt).getTime();
-          console.log('Comparando datas:', {
-            aId: a.id,
-            aDate: a.createdAt,
-            aTimestamp: aValue,
-            bId: b.id,
-            bDate: b.createdAt,
-            bTimestamp: bValue
-          });
         }
 
         // Lidar com valores undefined
@@ -432,15 +378,8 @@ export default function AdminOrders() {
       });
     }
 
-    console.log('Primeiros 10 pedidos exibidos (após filtro e ordenação):', currentOrders.slice(0, 10).map(order => ({
-      id: order.id,
-      createdAt: order.createdAt,
-      total: order.payment.total,
-      status: order.status
-    })));
-
     return currentOrders;
-  }, [orders, searchTerm, statusFilter, dateFilter, sortConfig]);
+  }, [orders, searchTerm, sortConfig]);
 
   // Função para salvar uma nova ordem com useCallback
   const saveOrder = useCallback(async (order: Partial<Order>) => {
@@ -530,7 +469,7 @@ export default function AdminOrders() {
 
                         <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 20px 0;">
                           <p style="margin: 5px 0;"><strong>Total do pedido:</strong> R$ ${updatedOrder.payment.total.toFixed(2)}</p>
-                          <p style="margin: 5px 0;"><strong>Método de pagamento:</strong> ${paymentMethodInfo[updatedOrder.payment.method].label}</p>
+                          <p style="margin: 5px 0;"><strong>Método de pagamento:</strong> ${paymentMethodInfo[updatedOrder.payment.paymentMethod]?.label || paymentMethodInfo.unknown.label}</p>
                           <p style="margin: 5px 0;"><strong>Método de entrega:</strong> ${updatedOrder.type === 'delivery' ? 'Entrega' : 'Retirada'}</p>
                           ${updatedOrder.notes ? `<p style="margin: 5px 0;"><strong>Observações:</strong> ${updatedOrder.notes}</p>` : ''}
                         </div>
@@ -660,7 +599,7 @@ export default function AdminOrders() {
 
                   <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 20px 0;">
                     <p style="margin: 5px 0;"><strong>Total do pedido:</strong> R$ ${pedido.payment.total.toFixed(2)}</p>
-                    <p style="margin: 5px 0;"><strong>Método de pagamento:</strong> ${paymentMethodInfo[pedido.payment.method].label}</p>
+                    <p style="margin: 5px 0;"><strong>Método de pagamento:</strong> ${paymentMethodInfo[pedido.payment.paymentMethod]?.label || paymentMethodInfo.unknown.label}</p>
                     <p style="margin: 5px 0;"><strong>Método de entrega:</strong> ${pedido.type === 'delivery' ? 'Entrega' : 'Retirada'}</p>
                     ${pedido.notes ? `<p style="margin: 5px 0;"><strong>Observações:</strong> ${pedido.notes}</p>` : ''}
                   </div>
@@ -921,8 +860,8 @@ export default function AdminOrders() {
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1">
-                            <span>{paymentMethodInfo[order.payment.method].icon}</span>
-                            <span className="text-xs">{paymentMethodInfo[order.payment.method].label}</span>
+                            <span>{paymentMethodInfo[order.payment.paymentMethod]?.icon || paymentMethodInfo.unknown.icon}</span>
+                            <span className="text-xs">{paymentMethodInfo[order.payment.paymentMethod]?.label || paymentMethodInfo.unknown.label}</span>
                           </div>
                         </td>
                         <td className="py-3 px-4">
@@ -1073,8 +1012,8 @@ export default function AdminOrders() {
                 <div>
                   <h4 className="font-medium mb-2">Método de Pagamento</h4>
                   <div className="flex items-center gap-2">
-                    <span>{paymentMethodInfo[selectedOrder.payment.method].icon}</span>
-                    <span>{paymentMethodInfo[selectedOrder.payment.method].label}</span>
+                    <span>{paymentMethodInfo[selectedOrder.payment.paymentMethod]?.icon || paymentMethodInfo.unknown.icon}</span>
+                    <span>{paymentMethodInfo[selectedOrder.payment.paymentMethod]?.label || paymentMethodInfo.unknown.label}</span>
                     <Badge className={paymentStatusInfo[selectedOrder.payment.status].color}>
                       {paymentStatusInfo[selectedOrder.payment.status].label}
                     </Badge>
