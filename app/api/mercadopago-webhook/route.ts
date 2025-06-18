@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       }
 
       await updateDoc(orderRef, {
-        status: "confirmed",
+        status: "pending",
         payment: {
           ...orderDoc.data().payment,
           status: "approved",
@@ -89,6 +89,13 @@ export async function POST(request: Request) {
           paymentId: paymentId,
           paymentMethod: paymentData.payment_method_id,
           transactionId: paymentData.transaction_details.transaction_id
+        },
+        statusHistory: {
+          ...orderDoc.data().statusHistory,
+          pending: {
+            timestamp: new Date(),
+            note: "Pagamento aprovado, pedido confirmado"
+          }
         }
       })
 
