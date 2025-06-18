@@ -11,7 +11,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Upload, X, Plus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { collection, addDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '@/lib/firebase';
 
 const categories = [
   { id: "tradicional", name: "Tradicional" },
@@ -40,6 +41,7 @@ export default function AdminAddDish() {
   const [newIngredient, setNewIngredient] = useState("")
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -82,6 +84,28 @@ export default function AdminAddDish() {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      // Validação de tipo de arquivo
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          title: "Tipo de arquivo não suportado",
+          description: "Por favor, selecione uma imagem no formato JPG, PNG ou WEBP.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validação de tamanho (5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB em bytes
+      if (file.size > maxSize) {
+        toast({
+          title: "Arquivo muito grande",
+          description: "A imagem deve ter no máximo 5MB.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setImageFile(file)
       const reader = new FileReader()
       reader.onloadend = () => {
@@ -120,9 +144,18 @@ export default function AdminAddDish() {
       return
     }
 
+    setIsSubmitting(true)
+
     try {
-      // 1. Primeiro, faz o upload da imagem (mantém mock por enquanto)
-      // ...
+      // 1. Upload da imagem para o Firebase Storage
+      toast({
+        title: "Fazendo upload da imagem...",
+        description: "Aguarde enquanto processamos sua imagem.",
+      });
+
+      const imageRef = ref(storage, `dishes/${Date.now()}_${imageFile.name}`);
+      const uploadResult = await uploadBytes(imageRef, imageFile);
+      const imageUrl = await getDownloadURL(uploadResult.ref);
 
       // 2. Gera um id único para o prato
       const generatedId = Date.now().toString();
@@ -143,7 +176,8 @@ export default function AdminAddDish() {
           fat: parseInt(formData.nutritionalInfo.fat),
         },
         isAvailable: true,
-        image: "/placeholder.svg", // Trocar pelo upload real depois
+        image: imageUrl, // URL real da imagem no Firebase Storage
+        createdAt: new Date().toISOString(),
       }
 
       // 4. Salva no Firestore
@@ -182,6 +216,8 @@ export default function AdminAddDish() {
         description: "Ocorreu um erro ao tentar adicionar o prato. Tente novamente.",
         variant: "destructive",
       })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -400,9 +436,9 @@ export default function AdminAddDish() {
           </div>
         </div>
 
-        <Button type="submit" className="w-full">
-            Adicionar Prato
-          </Button>
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? "Adicionando Prato..." : "Adicionar Prato"}
+        </Button>
       </form>
     </div>
   )

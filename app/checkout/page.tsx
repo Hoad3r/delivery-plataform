@@ -1,7 +1,7 @@
 "use client"
 // deploy
 import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -57,7 +57,6 @@ type CheckoutFormValues = z.infer<typeof checkoutSchema>
 export default function CheckoutPage() {
   const { toast } = useToast()
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { cart, clearCart } = useCart()
   const { user, isAuthenticated, addresses, addAddress } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -68,7 +67,6 @@ export default function CheckoutPage() {
   const [isPixPaid, setIsPixPaid] = useState(false)
   const [paymentId, setPaymentId] = useState<string | null>(null)
   const [currentOrderDocId, setCurrentOrderDocId] = useState<string | null>(null)
-  const [addressChanged, setAddressChanged] = useState(0)
 
   // Initialize form
   const form = useForm<CheckoutFormValues>({
@@ -207,93 +205,6 @@ export default function CheckoutPage() {
       }
     };
   }, [paymentId, currentOrderDocId, router, clearCart, toast]);
-
-  // Função para gerar novo QR Code PIX para pedido existente
-  const generateNewPixForOrder = async (orderDocId: string) => {
-    try {
-      console.log('🔄 Gerando novo PIX para pedido:', orderDocId)
-      const orderRef = doc(db, 'orders', orderDocId)
-      const orderDoc = await getDoc(orderRef)
-
-      if (!orderDoc.exists()) {
-        console.log('❌ Pedido não encontrado')
-        toast({
-          title: "Erro",
-          description: "Pedido não encontrado.",
-          variant: "destructive"
-        })
-        return
-      }
-
-      const orderData = orderDoc.data()
-      
-      if (orderData.status !== 'payment_pending') {
-        console.log('❌ Pedido não está pendente de pagamento')
-        toast({
-          title: "Erro",
-          description: "Este pedido não está mais pendente de pagamento.",
-          variant: "destructive"
-        })
-        return
-      }
-
-      // Gerar novo QR Code PIX
-      const response = await fetch('/api/pix', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: orderData.payment.total,
-          description: `Pedido ${orderData.id} - ${format(new Date(orderData.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
-          orderId: orderData.id
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('❌ Erro na resposta da API:', {
-          status: response.status,
-          data: errorData
-        })
-        throw new Error(errorData.error || 'Erro ao gerar PIX')
-      }
-
-      const data = await response.json()
-
-      if (!data.qr_code || !data.qr_code_base64) {
-        throw new Error('QR Code não encontrado na resposta')
-      }
-
-      setPixQrCode(data.qr_code_base64)
-      setPixCode(data.qr_code)
-      setPaymentId(data.id)
-      setCurrentOrderDocId(orderDocId)
-      setIsProcessingOrder(false)
-
-      console.log('✅ Novo QR Code PIX gerado com sucesso')
-    } catch (error) {
-      console.error('❌ Erro ao gerar novo PIX:', error)
-      toast({
-        title: "Erro",
-        description: error instanceof Error ? error.message : "Não foi possível gerar o novo PIX. Tente novamente.",
-        variant: "destructive"
-      })
-      setIsProcessingOrder(false)
-    }
-  }
-
-  // Verificar pedido na URL ao montar o componente
-  useEffect(() => {
-    if (!mounted) return
-
-    const orderDocId = searchParams.get('orderId')?.trim()
-    if (orderDocId) {
-      console.log('🔍 Pedido encontrado na URL:', orderDocId)
-      setIsProcessingOrder(true)
-      generateNewPixForOrder(orderDocId)
-    }
-  }, [mounted, searchParams])
 
   // Handle form submission
   async function onSubmit(values: CheckoutFormValues) {
@@ -498,103 +409,13 @@ export default function CheckoutPage() {
   }
 
   // Don't render anything until component is mounted or cart is empty
-  if (!mounted || (cart.length === 0 && !searchParams.get('orderId'))) {
+  if (!mounted || cart.length === 0) {
     return null
   }
 
   const subtotal = cart.reduce((total, item) => total + (item.price || 0) * (item.quantity || 1), 0)
   const deliveryFee = deliveryMethod === "delivery" ? 5.0 : 0
   const total = subtotal + deliveryFee
-
-  // Se não há itens no carrinho mas há um orderId, mostrar apenas o modal do QR Code
-  if (cart.length === 0 && searchParams.get('orderId')) {
-    return (
-      <div className="container mx-auto px-4 py-24 max-w-6xl mt-20 relative z-20">
-        <div className="mb-8">
-          <h1 className="text-3xl font-light mb-2">Pagamento Pendente</h1>
-          <p className="text-neutral-500">Complete o pagamento do seu pedido.</p>
-        </div>
-
-        {isProcessingOrder ? (
-          <div className="bg-white border border-neutral-200 rounded-sm overflow-hidden shadow-sm p-8">
-            <div className="flex flex-col items-center justify-center text-center space-y-4">
-              <div className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-              <h2 className="text-2xl font-light">Gerando QR Code PIX...</h2>
-              <p className="text-neutral-500">Por favor, aguarde enquanto geramos o QR Code para pagamento.</p>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white border border-neutral-200 rounded-sm overflow-hidden shadow-sm p-8">
-            <div className="text-center">
-              <h2 className="text-xl font-medium mb-2">QR Code PIX Gerado</h2>
-              <p className="text-neutral-600 mb-6">
-                O QR Code PIX foi gerado com sucesso. Verifique o modal acima para realizar o pagamento.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {pixQrCode && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white p-8 max-w-md w-full mx-4">
-              <div className="flex flex-col items-center justify-center text-center space-y-6">
-                <h2 className="text-2xl font-medium">Pague com PIX</h2>
-                
-                <div className="bg-white p-4 rounded-lg shadow-lg">
-                  <img 
-                    src={`data:image/png;base64,${pixQrCode}`} 
-                    alt="QR Code PIX" 
-                    className="w-64 h-64"
-                  />
-                </div>
-
-                <div className="w-full space-y-4">
-                  <div className="bg-neutral-50 p-4 rounded-lg">
-                    <p className="text-sm font-medium mb-2">Código PIX (copie e cole)</p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm break-all bg-white p-2 rounded border flex-1">{pixCode}</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          navigator.clipboard.writeText(pixCode || '')
-                          toast({
-                            title: "Código copiado!",
-                            description: "Cole no seu aplicativo do banco.",
-                          })
-                        }}
-                      >
-                        Copiar
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 text-sm text-neutral-600">
-                    <p>1. Abra o app do seu banco</p>
-                    <p>2. Escaneie o QR Code ou cole o código</p>
-                    <p>3. Confirme as informações e pague</p>
-                    <p>4. A tela fechará automaticamente após a confirmação</p>
-                  </div>
-
-                  <div className="flex justify-center">
-                    <Button
-                      onClick={() => {
-                        setPixQrCode(null)
-                        setPixCode(null)
-                        setPaymentId(null)
-                      }}
-                    >
-                      Fechar
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
 
   return (
     <div className="container mx-auto px-4 py-24 max-w-6xl mt-20 relative z-20">
@@ -797,7 +618,6 @@ export default function CheckoutPage() {
                               form.setValue("number", selectedAddress.number || "");
                               form.setValue("complement", selectedAddress.complement || "");
                               form.setValue("referencePoint", selectedAddress.neighborhood || "");
-                              setAddressChanged(prev => prev + 1); // força re-render
                             }
                           }} value={form.getValues("streetName") ? "custom" : ""}  >
                             <SelectTrigger className="rounded-none">
@@ -1021,7 +841,6 @@ export default function CheckoutPage() {
                     type="submit"
                     className="w-full rounded-none bg-primary text-white hover:bg-primary/90"
                     disabled={isSubmitting || (deliveryMethod === "delivery" && (!form.getValues("streetName") || !form.getValues("postalCode") || !form.getValues("number")))}
-                    key={addressChanged}
                   >
                     {isSubmitting ? (
                       "Processando..."
