@@ -52,7 +52,6 @@ export async function POST(request: Request) {
       // Definir data de expiração para 24 horas
       date_of_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       external_reference: orderId,
-      notification_url: `https://nossacozinhajp.com.br/api/mercadopago-webhook`,
       statement_descriptor: 'Nossa Cozinha'
     }
 

@@ -126,16 +126,41 @@ export default function CheckoutPage() {
           if (response.ok) {
             console.log('Payment status check:', data.status);
             if (data.status === 'approved') {
-              // Payment confirmed
-              clearInterval(intervalId!); // Stop polling
-              setPixQrCode(null); // Close modal
-              setPixCode(null);
-              setPaymentId(null); // Clear payment ID
-              setIsPixPaid(true); // Indicate payment is paid (optional, depends on usage)
+              // Payment confirmed - Update order status in Firestore
+              try {
+                // Get orderId from external_reference
+                const orderId = data.external_reference;
+                if (orderId) {
+                  const orderRef = doc(db, "orders", orderId);
+                  await updateDoc(orderRef, {
+                    status: "pending",
+                    payment: {
+                      status: "approved",
+                      approvedAt: new Date().toISOString(),
+                      paymentId: paymentId,
+                      paymentMethod: data.payment_method_id,
+                      transactionId: data.transaction_details?.transaction_id
+                    },
+                    statusHistory: {
+                      pending: {
+                        timestamp: new Date(),
+                        note: "Pagamento aprovado, pedido confirmado"
+                      }
+                    }
+                  });
+                  console.log('Order status updated to pending');
+                }
+              } catch (updateError) {
+                console.error('Error updating order status:', updateError);
+              }
 
-              // Proceed to save order and redirect
-              // You might want to move the order saving logic here or trigger it
-              // after payment is approved. For now, let's just redirect.
+              // Stop polling and redirect
+              clearInterval(intervalId!);
+              setPixQrCode(null);
+              setPixCode(null);
+              setPaymentId(null);
+              setIsPixPaid(true);
+
               clearCart();
               toast({
                 title: "Pagamento confirmado!",
@@ -145,10 +170,10 @@ export default function CheckoutPage() {
               router.push("/pedido-confirmado");
             } else if (data.status === 'rejected' || data.status === 'cancelled') {
               // Payment failed or cancelled
-              clearInterval(intervalId!); // Stop polling
-              setPixQrCode(null); // Close modal
+              clearInterval(intervalId!);
+              setPixQrCode(null);
               setPixCode(null);
-              setPaymentId(null); // Clear payment ID
+              setPaymentId(null);
               toast({
                 title: "Pagamento não aprovado",
                 description: "O pagamento foi rejeitado ou cancelado. Tente novamente.",
@@ -158,11 +183,9 @@ export default function CheckoutPage() {
             // Keep polling for other statuses (pending, in_process, etc.)
           } else {
             console.error('Error fetching payment status:', data);
-            // Optionally stop polling after a few errors or show a message
           }
         } catch (error) {
           console.error('Error during payment status polling:', error);
-          // Optionally stop polling after a few errors
         }
       }, 5000); // Poll every 5 seconds
     }
