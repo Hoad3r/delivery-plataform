@@ -64,6 +64,7 @@ export default function CheckoutPage() {
   const [pixCode, setPixCode] = useState<string | null>(null)
   const [isPixPaid, setIsPixPaid] = useState(false)
   const [paymentId, setPaymentId] = useState<string | null>(null)
+  const [currentOrderDocId, setCurrentOrderDocId] = useState<string | null>(null)
 
   // Initialize form
   const form = useForm<CheckoutFormValues>({
@@ -134,13 +135,11 @@ export default function CheckoutPage() {
               
               // Payment confirmed - Update order status in Firestore
               try {
-                // Get orderId from external_reference
-                const orderId = data.external_reference;
-                console.log('🔍 Order ID from external_reference:', orderId);
+                console.log('🔍 Current order docId:', currentOrderDocId);
                 
-                if (orderId) {
+                if (currentOrderDocId) {
                   console.log('📝 Updating order in Firestore...');
-                  const orderRef = doc(db, "orders", orderId);
+                  const orderRef = doc(db, "orders", currentOrderDocId);
                   
                   const updateData = {
                     status: "pending",
@@ -164,7 +163,7 @@ export default function CheckoutPage() {
                   await updateDoc(orderRef, updateData);
                   console.log('✅ Order status updated to pending successfully!');
                 } else {
-                  console.error('❌ No orderId found in external_reference');
+                  console.error('❌ No currentOrderDocId found');
                 }
               } catch (updateError) {
                 console.error('❌ Error updating order status:', updateError);
@@ -180,6 +179,7 @@ export default function CheckoutPage() {
               setPixQrCode(null);
               setPixCode(null);
               setPaymentId(null);
+              setCurrentOrderDocId(null);
               setIsPixPaid(true);
 
               clearCart();
@@ -196,6 +196,7 @@ export default function CheckoutPage() {
               setPixQrCode(null);
               setPixCode(null);
               setPaymentId(null);
+              setCurrentOrderDocId(null);
               toast({
                 title: "Pagamento não aprovado",
                 description: "O pagamento foi rejeitado ou cancelado. Tente novamente.",
@@ -221,7 +222,7 @@ export default function CheckoutPage() {
         clearInterval(intervalId);
       }
     };
-  }, [paymentId, router, clearCart, toast]);
+  }, [paymentId, currentOrderDocId, router, clearCart, toast]);
 
   // Handle form submission
   async function onSubmit(values: CheckoutFormValues) {
@@ -395,6 +396,7 @@ export default function CheckoutPage() {
       setPixQrCode(paymentData.qr_code_base64)
       setPixCode(paymentData.qr_code)
       setPaymentId(paymentData.id)
+      setCurrentOrderDocId(newOrderRef.id)
       setIsProcessingOrder(false)
       setIsSubmitting(false)
 
