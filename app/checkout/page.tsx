@@ -120,6 +120,7 @@ export default function CheckoutPage() {
 
     if (paymentId) {
       console.log('🚀 Starting payment status polling for paymentId:', paymentId);
+      console.log('📋 Current order docId available:', currentOrderDocId);
       intervalId = setInterval(async () => {
         try {
           console.log('📡 Polling payment status...');
@@ -139,6 +140,7 @@ export default function CheckoutPage() {
                 
                 if (currentOrderDocId) {
                   console.log('📝 Updating order in Firestore...');
+                  console.log('🔧 Using docId:', currentOrderDocId);
                   const orderRef = doc(db, "orders", currentOrderDocId);
                   
                   const updateData = {
@@ -159,6 +161,7 @@ export default function CheckoutPage() {
                   };
                   
                   console.log('📋 Update data:', updateData);
+                  console.log('🎯 Full document path:', `orders/${currentOrderDocId}`);
                   
                   await updateDoc(orderRef, updateData);
                   console.log('✅ Order status updated to pending successfully!');
@@ -397,6 +400,7 @@ export default function CheckoutPage() {
       setPixCode(paymentData.qr_code)
       setPaymentId(paymentData.id)
       setCurrentOrderDocId(newOrderRef.id)
+      console.log('💾 Set currentOrderDocId:', newOrderRef.id);
       setIsProcessingOrder(false)
       setIsSubmitting(false)
 
