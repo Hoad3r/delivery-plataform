@@ -1,7 +1,7 @@
 "use client"
 // deploy
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -43,20 +43,31 @@ const checkoutSchema = z.object({
   name: z.string().min(3, "Nome é obrigatório").optional(),
   email: z.string().email("Email inválido").optional(),
   phone: z.string().min(10, "Número de telefone inválido").optional(),
-  streetName: z.string().min(3, "Nome da rua é obrigatório").optional(),
-  postalCode: z.string().min(8, "CEP é obrigatório").optional(),
-  number: z.string().min(1, "Número é obrigatório").optional(),
+  streetName: z.string().optional(),
+  postalCode: z.string().optional(),
+  number: z.string().optional(),
   complement: z.string().optional(),
   referencePoint: z.string().optional(),
   saveAddress: z.boolean().optional(),
   notes: z.string().optional(),
-})
+}).refine((data) => {
+  // Se for entrega, os campos de endereço são obrigatórios
+  if (data.deliveryMethod === "delivery") {
+    return data.streetName && data.postalCode && data.number;
+  }
+  // Se for retirada, os campos de endereço não são necessários
+  return true;
+}, {
+  message: "Para entrega, preencha todos os campos de endereço obrigatórios",
+  path: ["streetName"] // Mostra o erro no campo streetName
+});
 
 type CheckoutFormValues = z.infer<typeof checkoutSchema>
 
 export default function CheckoutPage() {
   const { toast } = useToast()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { cart, clearCart } = useCart()
   const { user, isAuthenticated, addresses, addAddress } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -67,6 +78,7 @@ export default function CheckoutPage() {
   const [isPixPaid, setIsPixPaid] = useState(false)
   const [paymentId, setPaymentId] = useState<string | null>(null)
   const [currentOrderDocId, setCurrentOrderDocId] = useState<string | null>(null)
+  const [addressChanged, setAddressChanged] = useState(0)
 
   // Initialize form
   const form = useForm<CheckoutFormValues>({
@@ -152,6 +164,204 @@ export default function CheckoutPage() {
                   
                   await updateDoc(orderRef, updateData);
                   console.log('✅ Pedido atualizado com sucesso!');
+
+                  // Buscar dados completos do pedido para enviar emails
+                  const orderDoc = await getDoc(orderRef);
+                  if (orderDoc.exists()) {
+                    const orderData = orderDoc.data();
+                    
+                    // Enviar emails de confirmação
+                    try {
+                      // 1. Email para o cliente
+                      if (orderData.user?.email) {
+                        const clientEmailResponse = await fetch('/api/send-email', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({
+                            to: orderData.user.email,
+                            subject: `🎉 Pedido #${orderData.id} Pago - Aguardando Confirmação`,
+                            html: `
+                              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px; background-color: #f8fafc;">
+                                <div style="text-align: center; margin-bottom: 20px;">
+                                  <h1 style="color: #059669; margin: 0;">🎉 PEDIDO PAGO!</h1>
+                                  <p style="color: #059669; font-size: 18px; font-weight: bold; margin: 5px 0;">Pedido #${orderData.id}</p>
+                                </div>
+                                
+                                <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #059669; margin-bottom: 20px;">
+                                  <h2 style="color: #1e293b; margin-top: 0;">✅ Pagamento Confirmado</h2>
+                                  <p style="font-size: 16px; color: #374151;">Seu pagamento foi confirmado com sucesso!</p>
+                                </div>
+
+                                <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                  <h3 style="color: #1e293b; margin-top: 0;">📋 Seu Pedido:</h3>
+                                  <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px;">
+                                    <ul style="list-style: none; padding: 0; margin: 0;">
+                                      ${orderData.items.map((item: any) => `
+                                        <li style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;">
+                                          <span><strong>${item.quantity}x</strong> ${item.name}</span>
+                                          <span style="font-weight: bold;">R$ ${(item.price * item.quantity).toFixed(2)}</span>
+                                        </li>
+                                      `).join('')}
+                                    </ul>
+                                  </div>
+                                </div>
+
+                                <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                  <h3 style="color: #1e293b; margin-top: 0;">💰 Informações de Pagamento:</h3>
+                                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <div>
+                                      <strong>Total:</strong> R$ ${orderData.payment.total.toFixed(2)}
+                                    </div>
+                                    <div>
+                                      <strong>Método:</strong> PIX
+                                    </div>
+                                    <div>
+                                      <strong>Status:</strong> <span style="color: #059669; font-weight: bold;">PAGO</span>
+                                    </div>
+                                    <div>
+                                      <strong>Entrega:</strong> ${orderData.type === 'delivery' ? 'Entrega' : 'Retirada'}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                ${orderData.notes ? `
+                                  <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                    <h3 style="color: #1e293b; margin-top: 0;">📝 Observações:</h3>
+                                    <p style="background-color: #fef3c7; padding: 10px; border-radius: 5px; margin: 0;">${orderData.notes}</p>
+                                  </div>
+                                ` : ''}
+
+                                <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #f59e0b;">
+                                  <h3 style="color: #92400e; margin-top: 0;">⏳ AGUARDANDO CONFIRMAÇÃO</h3>
+                                  <p style="color: #92400e; font-size: 16px; font-weight: bold; margin: 0;">
+                                    Seu pedido está aguardando o restaurante aceitar!
+                                  </p>
+                                  <p style="color: #92400e; font-size: 14px; margin: 5px 0 0 0;">
+                                    Você receberá uma notificação assim que o pedido for aceito e começar a ser preparado.
+                                  </p>
+                                </div>
+
+                                <div style="text-align: center; margin-top: 20px; color: #64748b; font-size: 14px;">
+                                  <p>Agradecemos a preferência!</p>
+                                  <p><strong>Nossa Cozinha</strong></p>
+                                </div>
+                              </div>
+                            `
+                          }),
+                        });
+
+                        if (!clientEmailResponse.ok) {
+                          console.error('Erro ao enviar email para cliente');
+                        }
+                      }
+
+                      // 2. Email para o restaurante
+                      const restaurantEmailResponse = await fetch('/api/send-email', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          to: 'nossacozinhajp@gmail.com',
+                          subject: `🚨 PEDIDO PAGO - #${orderData.id} - PREPARAR IMEDIATAMENTE`,
+                          html: `
+                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px; background-color: #fef2f2;">
+                              <div style="text-align: center; margin-bottom: 20px;">
+                                <h1 style="color: #dc2626; margin: 0;">🚨 PEDIDO PAGO!</h1>
+                                <p style="color: #dc2626; font-size: 18px; font-weight: bold; margin: 5px 0;">Pedido #${orderData.id}</p>
+                                <p style="color: #dc2626; font-size: 16px; margin: 5px 0;">PREPARAR IMEDIATAMENTE</p>
+                              </div>
+                              
+                              <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #dc2626; margin-bottom: 20px;">
+                                <h2 style="color: #1e293b; margin-top: 0;">✅ Pagamento Confirmado</h2>
+                                <p style="font-size: 16px; color: #374151;">O pagamento do pedido foi confirmado e está pronto para preparo!</p>
+                              </div>
+
+                              <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                <h3 style="color: #1e293b; margin-top: 0;">📋 Detalhes do Pedido:</h3>
+                                <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px;">
+                                  <ul style="list-style: none; padding: 0; margin: 0;">
+                                    ${orderData.items.map((item: any) => `
+                                      <li style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;">
+                                        <span><strong>${item.quantity}x</strong> ${item.name}</span>
+                                        <span style="font-weight: bold;">R$ ${(item.price * item.quantity).toFixed(2)}</span>
+                                      </li>
+                                    `).join('')}
+                                  </ul>
+                                </div>
+                              </div>
+
+                              <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                <h3 style="color: #1e293b; margin-top: 0;">💰 Informações de Pagamento:</h3>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                  <div>
+                                    <strong>Total:</strong> R$ ${orderData.payment.total.toFixed(2)}
+                                  </div>
+                                  <div>
+                                    <strong>Método:</strong> PIX
+                                  </div>
+                                  <div>
+                                    <strong>Status:</strong> <span style="color: #059669; font-weight: bold;">PAGO</span>
+                                  </div>
+                                  <div>
+                                    <strong>Entrega:</strong> ${orderData.type === 'delivery' ? 'Entrega' : 'Retirada'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                <h3 style="color: #1e293b; margin-top: 0;">👤 Cliente:</h3>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                  <div>
+                                    <strong>Nome:</strong> ${orderData.user.name}
+                                  </div>
+                                  <div>
+                                    <strong>Telefone:</strong> ${orderData.user.phone}
+                                  </div>
+                                  ${orderData.type === 'delivery' && orderData.delivery.address ? `
+                                    <div style="grid-column: 1 / -1;">
+                                      <strong>Endereço:</strong> ${orderData.delivery.address}
+                                    </div>
+                                  ` : ''}
+                                </div>
+                              </div>
+
+                              ${orderData.notes ? `
+                                <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                  <h3 style="color: #1e293b; margin-top: 0;">📝 Observações:</h3>
+                                  <p style="background-color: #fef3c7; padding: 10px; border-radius: 5px; margin: 0;">${orderData.notes}</p>
+                                </div>
+                              ` : ''}
+
+                              <div style="background-color: #dbeafe; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #3b82f6;">
+                                <h3 style="color: #1e40af; margin-top: 0;">🚀 AÇÃO NECESSÁRIA</h3>
+                                <p style="color: #1e40af; font-size: 16px; font-weight: bold; margin: 0;">
+                                  O pedido está pronto para ser preparado!
+                                </p>
+                                <p style="color: #1e40af; font-size: 14px; margin: 5px 0 0 0;">
+                                  Tempo estimado: ${orderData.type === 'delivery' ? '45 minutos' : '30 minutos'}
+                                </p>
+                              </div>
+
+                              <div style="text-align: center; margin-top: 20px; color: #64748b; font-size: 14px;">
+                                <p><strong>Nossa Cozinha - Sistema de Pedidos</strong></p>
+                              </div>
+                            </div>
+                          `
+                        }),
+                      });
+
+                      if (!restaurantEmailResponse.ok) {
+                        console.error('Erro ao enviar email para restaurante');
+                      }
+
+                      console.log('✅ Emails de confirmação enviados com sucesso!');
+                    } catch (emailError) {
+                      console.error('❌ Erro ao enviar emails:', emailError);
+                    }
+                  }
                 } else {
                   console.error('❌ ID do pedido não encontrado');
                 }
@@ -205,6 +415,93 @@ export default function CheckoutPage() {
       }
     };
   }, [paymentId, currentOrderDocId, router, clearCart, toast]);
+
+  // Função para gerar novo QR Code PIX para pedido existente
+  const generateNewPixForOrder = async (orderDocId: string) => {
+    try {
+      console.log('🔄 Gerando novo PIX para pedido:', orderDocId)
+      const orderRef = doc(db, 'orders', orderDocId)
+      const orderDoc = await getDoc(orderRef)
+
+      if (!orderDoc.exists()) {
+        console.log('❌ Pedido não encontrado')
+        toast({
+          title: "Erro",
+          description: "Pedido não encontrado.",
+          variant: "destructive"
+        })
+        return
+      }
+
+      const orderData = orderDoc.data()
+      
+      if (orderData.status !== 'payment_pending') {
+        console.log('❌ Pedido não está pendente de pagamento')
+        toast({
+          title: "Erro",
+          description: "Este pedido não está mais pendente de pagamento.",
+          variant: "destructive"
+        })
+        return
+      }
+
+      // Gerar novo QR Code PIX
+      const response = await fetch('/api/pix', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: orderData.payment.total,
+          description: `Pedido ${orderData.id} - ${format(new Date(orderData.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
+          orderId: orderData.id
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('❌ Erro na resposta da API:', {
+          status: response.status,
+          data: errorData
+        })
+        throw new Error(errorData.error || 'Erro ao gerar PIX')
+      }
+
+      const data = await response.json()
+
+      if (!data.qr_code || !data.qr_code_base64) {
+        throw new Error('QR Code não encontrado na resposta')
+      }
+
+      setPixQrCode(data.qr_code_base64)
+      setPixCode(data.qr_code)
+      setPaymentId(data.id)
+      setCurrentOrderDocId(orderDocId)
+      setIsProcessingOrder(false)
+
+      console.log('✅ Novo QR Code PIX gerado com sucesso')
+    } catch (error) {
+      console.error('❌ Erro ao gerar novo PIX:', error)
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Não foi possível gerar o novo PIX. Tente novamente.",
+        variant: "destructive"
+      })
+      setIsProcessingOrder(false)
+    }
+  }
+
+  // Verificar pedido na URL ao montar o componente
+  useEffect(() => {
+    if (!mounted) return
+
+    const orderDocId = searchParams.get('orderId')?.trim()
+    if (orderDocId) {
+      console.log('🔍 Pedido encontrado na URL:', orderDocId)
+      setIsProcessingOrder(true)
+      generateNewPixForOrder(orderDocId)
+    }
+  }, [mounted, searchParams])
 
   // Handle form submission
   async function onSubmit(values: CheckoutFormValues) {
@@ -409,13 +706,103 @@ export default function CheckoutPage() {
   }
 
   // Don't render anything until component is mounted or cart is empty
-  if (!mounted || cart.length === 0) {
+  if (!mounted || (cart.length === 0 && !searchParams.get('orderId'))) {
     return null
   }
 
   const subtotal = cart.reduce((total, item) => total + (item.price || 0) * (item.quantity || 1), 0)
   const deliveryFee = deliveryMethod === "delivery" ? 5.0 : 0
   const total = subtotal + deliveryFee
+
+  // Se não há itens no carrinho mas há um orderId, mostrar apenas o modal do QR Code
+  if (cart.length === 0 && searchParams.get('orderId')) {
+    return (
+      <div className="container mx-auto px-4 py-24 max-w-6xl mt-20 relative z-20">
+        <div className="mb-8">
+          <h1 className="text-3xl font-light mb-2">Pagamento Pendente</h1>
+          <p className="text-neutral-500">Complete o pagamento do seu pedido.</p>
+        </div>
+
+        {isProcessingOrder ? (
+          <div className="bg-white border border-neutral-200 rounded-sm overflow-hidden shadow-sm p-8">
+            <div className="flex flex-col items-center justify-center text-center space-y-4">
+              <div className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+              <h2 className="text-2xl font-light">Gerando QR Code PIX...</h2>
+              <p className="text-neutral-500">Por favor, aguarde enquanto geramos o QR Code para pagamento.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white border border-neutral-200 rounded-sm overflow-hidden shadow-sm p-8">
+            <div className="text-center">
+              <h2 className="text-xl font-medium mb-2">QR Code PIX Gerado</h2>
+              <p className="text-neutral-600 mb-6">
+                O QR Code PIX foi gerado com sucesso. Verifique o modal acima para realizar o pagamento.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {pixQrCode && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-8 max-w-md w-full mx-4">
+              <div className="flex flex-col items-center justify-center text-center space-y-6">
+                <h2 className="text-2xl font-medium">Pague com PIX</h2>
+                
+                <div className="bg-white p-4 rounded-lg shadow-lg">
+                  <img 
+                    src={`data:image/png;base64,${pixQrCode}`} 
+                    alt="QR Code PIX" 
+                    className="w-64 h-64"
+                  />
+                </div>
+
+                <div className="w-full space-y-4">
+                  <div className="bg-neutral-50 p-4 rounded-lg">
+                    <p className="text-sm font-medium mb-2">Código PIX (copie e cole)</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm break-all bg-white p-2 rounded border flex-1">{pixCode}</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(pixCode || '')
+                          toast({
+                            title: "Código copiado!",
+                            description: "Cole no seu aplicativo do banco.",
+                          })
+                        }}
+                      >
+                        Copiar
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-sm text-neutral-600">
+                    <p>1. Abra o app do seu banco</p>
+                    <p>2. Escaneie o QR Code ou cole o código</p>
+                    <p>3. Confirme as informações e pague</p>
+                    <p>4. A tela fechará automaticamente após a confirmação</p>
+                  </div>
+
+                  <div className="flex justify-center">
+                    <Button
+                      onClick={() => {
+                        setPixQrCode(null)
+                        setPixCode(null)
+                        setPaymentId(null)
+                      }}
+                    >
+                      Fechar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto px-4 py-24 max-w-6xl mt-20 relative z-20">
@@ -618,6 +1005,7 @@ export default function CheckoutPage() {
                               form.setValue("number", selectedAddress.number || "");
                               form.setValue("complement", selectedAddress.complement || "");
                               form.setValue("referencePoint", selectedAddress.neighborhood || "");
+                              setAddressChanged(prev => prev + 1); // força re-render
                             }
                           }} value={form.getValues("streetName") ? "custom" : ""}  >
                             <SelectTrigger className="rounded-none">
@@ -841,6 +1229,7 @@ export default function CheckoutPage() {
                     type="submit"
                     className="w-full rounded-none bg-primary text-white hover:bg-primary/90"
                     disabled={isSubmitting || (deliveryMethod === "delivery" && (!form.getValues("streetName") || !form.getValues("postalCode") || !form.getValues("number")))}
+                    key={addressChanged}
                   >
                     {isSubmitting ? (
                       "Processando..."
