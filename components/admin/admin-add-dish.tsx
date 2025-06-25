@@ -1,395 +1,449 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useRef } from "react"
 import Image from "next/image"
-import { Edit, MoreHorizontal, Trash2, EyeOff, Eye } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
+
 import { Input } from "@/components/ui/input"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { useMenu } from "@/contexts/menu-context"
-import { formatCurrency } from "@/lib/utils"
-import { Dish } from "@/types/menu"
-import { collection, getDocs, onSnapshot, QuerySnapshot, DocumentData, doc, updateDoc, deleteDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
 import { useToast } from "@/hooks/use-toast"
-import { ref as storageRef, deleteObject } from "firebase/storage"
-import { storage } from "@/lib/firebase"
+import { Upload, X, Plus } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { collection, addDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '@/lib/firebase';
 
-export default function AdminDishList() {
-  const [dishes, setDishes] = useState<Dish[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [showInactive, setShowInactive] = useState(false)
-  const [editingDish, setEditingDish] = useState<Dish | null>(null)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [dishToDelete, setDishToDelete] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState<Partial<Dish> | null>(null)
-  const [isSavingEdit, setIsSavingEdit] = useState(false)
+const categories = [
+  { id: "tradicional", name: "Tradicional" },
+  { id: "fitness", name: "Fitness" },
+  { id: "vegetariana", name: "Vegetariana" },
+  { id: "lowcarb", name: "Low Carb" },
+]
+
+export default function AdminAddDish() {
   const { toast } = useToast()
-
-  // Buscar pratos do Firestore
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "dishes"), (snapshot: QuerySnapshot<DocumentData>) => {
-      const pratos: Dish[] = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.data().id }))
-      setDishes(pratos)
-    })
-    return () => unsubscribe()
-  }, [])
-
-  const filteredDishes = dishes.filter((dish) => {
-    const matchesSearch = dish.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = showInactive ? true : dish.isAvailable
-    return matchesSearch && matchesStatus
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    price: "",
+    category: "",
+    ingredients: [] as string[],
+    preparationTime: "",
+    nutritionalInfo: {
+      calories: "",
+      protein: "",
+      carbs: "",
+      fat: "",
+    },
   })
+  const [newIngredient, setNewIngredient] = useState("")
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleToggleActive = async (id: string, currentStatus: boolean) => {
-    try {
-      // Buscar o documento pelo campo id
-      const snapshot = await getDocs(collection(db, "dishes"));
-      const dishDoc = snapshot.docs.find(docSnap => docSnap.data().id === id);
-      if (dishDoc) {
-        await updateDoc(doc(db, "dishes", dishDoc.id), {
-          isAvailable: !currentStatus
-        });
-        toast({
-          title: !currentStatus ? "Prato ativado" : "Prato desativado",
-          description: !currentStatus ? "O prato foi ativado com sucesso." : "O prato foi desativado com sucesso.",
-          variant: !currentStatus ? "success" : "destructive"
-        })
-      }
-    } catch (error) {
-      console.error("Erro ao atualizar disponibilidade do prato:", error);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    if (name.includes(".")) {
+      const [parent, child] = name.split(".")
+      setFormData((prev) => ({
+        ...prev,
+        [parent]: { ...(prev as any)[parent], [child]: value },
+      }))
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }))
     }
   }
 
-  const handleDeleteDish = async () => {
-    try {
-      const snapshot = await getDocs(collection(db, "dishes"));
-      const dishDoc = snapshot.docs.find(docSnap => docSnap.data().id === dishToDelete);
-      if (dishDoc) {
-        const dishData = dishDoc.data();
-        // Exclui a imagem do Storage, se existir
-        if (dishData.image) {
-          // Extrai o caminho do arquivo a partir da URL
-          const match = decodeURIComponent(dishData.image).match(/\/o\/(.*)\?alt=media/);
-          const filePath = match ? match[1] : null;
-          if (filePath) {
-            const imageRef = storageRef(storage, filePath);
-            await deleteObject(imageRef);
-          }
-        }
-        // Exclui o documento do prato
-        await deleteDoc(doc(db, "dishes", dishDoc.id));
-        toast({
-          title: "Prato removido",
-          description: "O prato e sua imagem foram removidos com sucesso.",
-          variant: "destructive"
-        })
-      }
-    } catch (error) {
-      console.error("Erro ao remover prato:", error)
+  const handleCategoryChange = (value: string) => {
+    setFormData((prev) => ({ ...prev, category: value }))
+  }
+
+  const handleAddIngredient = () => {
+    if (newIngredient.trim()) {
+      setFormData((prev) => ({
+        ...prev,
+        ingredients: [...prev.ingredients, newIngredient.trim()],
+      }))
+      setNewIngredient("")
     }
-    setIsDeleteDialogOpen(false)
-    setDishToDelete(null)
   }
 
-  // Função para abrir modal de edição com dados do prato
-  const openEditModal = (dish: Dish) => {
-    setEditingDish(dish)
-    setEditForm({ ...dish })
+  const handleRemoveIngredient = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      ingredients: prev.ingredients.filter((_, i) => i !== index),
+    }))
   }
 
-  // Função para salvar edição
-  const handleEditSave = async () => {
-    if (!editForm || !editForm.id) return
-    setIsSavingEdit(true)
-    try {
-      // Buscar o documento pelo campo id
-      const snapshot = await getDocs(collection(db, "dishes"));
-      const dishDoc = snapshot.docs.find(docSnap => docSnap.data().id === editForm.id);
-      if (dishDoc) {
-        await updateDoc(doc(db, "dishes", dishDoc.id), {
-          name: editForm.name,
-          description: editForm.description,
-          price: editForm.price,
-          category: editForm.category,
-          ingredients: editForm.ingredients,
-          preparationTime: editForm.preparationTime,
-          nutritionalInfo: editForm.nutritionalInfo,
-        });
+  const handleImageClick = () => {
+    if (fileInputRef.current) fileInputRef.current.click()
+  }
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validação de tipo de arquivo
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
         toast({
-          title: "Prato editado",
-          description: "As alterações foram salvas com sucesso.",
-          variant: "success"
-        })
+          title: "Tipo de arquivo não suportado",
+          description: "Por favor, selecione uma imagem no formato JPG, PNG ou WEBP.",
+          variant: "destructive",
+        });
+        return;
       }
-      setEditingDish(null)
-      setEditForm(null)
+
+      // Validação de tamanho (5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB em bytes
+      if (file.size > maxSize) {
+        toast({
+          title: "Arquivo muito grande",
+          description: "A imagem deve ter no máximo 5MB.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setImageFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const removeImage = () => {
+    setImagePreview(null)
+    setImageFile(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    // Validação básica
+    if (
+      !formData.name ||
+      !formData.description ||
+      !formData.price ||
+      !formData.category ||
+      !formData.ingredients.length ||
+      !formData.preparationTime ||
+      !imageFile
+    ) {
+      toast({
+        title: "Erro ao adicionar prato",
+        description: "Por favor, preencha todos os campos obrigatórios.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      // 1. Upload da imagem para o Firebase Storage
+      toast({
+        title: "Fazendo upload da imagem...",
+        description: "Aguarde enquanto processamos sua imagem.",
+      });
+
+      const imageRef = ref(storage, `dishes/${Date.now()}_${imageFile.name}`);
+      const uploadResult = await uploadBytes(imageRef, imageFile);
+      const imageUrl = await getDownloadURL(uploadResult.ref);
+
+      // 2. Gera um id único para o prato
+      const generatedId = Date.now().toString();
+
+      // 3. Cria o prato com a URL da imagem
+      const dishData = {
+        id: generatedId,
+        name: formData.name,
+        description: formData.description,
+        price: parseFloat(formData.price),
+        category: formData.category,
+        ingredients: formData.ingredients,
+        preparationTime: parseInt(formData.preparationTime),
+        nutritionalInfo: {
+          calories: parseInt(formData.nutritionalInfo.calories),
+          protein: parseInt(formData.nutritionalInfo.protein),
+          carbs: parseInt(formData.nutritionalInfo.carbs),
+          fat: parseInt(formData.nutritionalInfo.fat),
+        },
+        isAvailable: true,
+        image: imageUrl, // URL real da imagem no Firebase Storage
+        createdAt: new Date().toISOString(),
+      }
+
+      // 4. Salva no Firestore
+      await addDoc(collection(db, 'dishes'), dishData);
+
+      toast({
+        title: "Prato adicionado com sucesso!",
+        description: `${formData.name} foi adicionado ao cardápio.`,
+        variant: "success"
+      })
+
+      // Limpar o formulário
+      setFormData({
+        name: "",
+        description: "",
+        price: "",
+        category: "",
+        ingredients: [],
+        preparationTime: "",
+        nutritionalInfo: {
+          calories: "",
+          protein: "",
+          carbs: "",
+          fat: "",
+        },
+      })
+      setImagePreview(null)
+      setImageFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+
     } catch (error) {
-      console.error("Erro ao editar prato:", error)
+      console.error("Erro ao adicionar prato:", error)
+      toast({
+        title: "Erro ao adicionar prato",
+        description: "Ocorreu um erro ao tentar adicionar o prato. Tente novamente.",
+        variant: "destructive",
+      })
     } finally {
-      setIsSavingEdit(false)
+      setIsSubmitting(false)
     }
   }
 
   return (
-    <div>
-      <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between">
-        <Input
-          placeholder="Buscar pratos..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-md rounded-none"
-        />
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="show-inactive" 
-            checked={showInactive} 
-            onCheckedChange={(checked) => setShowInactive(checked === true)} 
-          />
-          <label htmlFor="show-inactive" className="text-xs md:text-sm text-neutral-600">
-            Mostrar pratos inativos
-          </label>
-        </div>
-      </div>
+    <div className="max-w-2xl mx-auto">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-4">
+          {/* Informações Básicas */}
+          <div>
+            <Label htmlFor="name">Nome do Prato *</Label>
+            <Input
+              id="name"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              className="mt-1"
+              required
+            />
+          </div>
 
-      <div className="border border-neutral-200">
-        <div className="grid grid-cols-12 bg-neutral-50 p-4 border-b border-neutral-200 hidden md:grid">
-          <div className="col-span-1 font-light text-neutral-500">Imagem</div>
-          <div className="col-span-3 font-light text-neutral-500">Nome</div>
-          <div className="col-span-3 font-light text-neutral-500">Descrição</div>
-          <div className="col-span-1 font-light text-neutral-500">Preço</div>
-          <div className="col-span-2 font-light text-neutral-500">Status</div>
-          <div className="col-span-2 font-light text-neutral-500 text-right">Ações</div>
-        </div>
+          <div>
+            <Label htmlFor="description">Descrição *</Label>
+            <Textarea
+              id="description"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              className="mt-1 min-h-[100px]"
+              required
+            />
+          </div>
 
-        {filteredDishes.length === 0 ? (
-          <div className="p-8 text-center text-neutral-500">Nenhum prato encontrado.</div>
-        ) : (
-          filteredDishes.map((dish) => (
-            <div
-              key={dish.id}
-              className={`grid grid-cols-1 md:grid-cols-12 p-4 border-b border-neutral-200 gap-4 md:gap-0 ${!dish.isAvailable ? "bg-neutral-50" : ""}`}
-            >
-              {/* Mobile view */}
-              <div className="flex flex-col md:hidden">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex gap-3">
-                    <div className="relative w-16 h-16 flex-shrink-0">
-                      <Image src={dish.image || "/placeholder.svg"} alt={dish.name} fill className="object-cover" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-sm">{dish.name}</h3>
-                      <p className="text-xs text-neutral-500 line-clamp-2">{dish.description}</p>
-                      <p className="text-xs mt-1">{formatCurrency(dish.price)}</p>
-                      <div className="mt-2">
-                        <span
-                          className={`px-2 py-1 text-xs rounded-full ${dish.isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
-                        >
-                          {dish.isAvailable ? "Ativo" : "Inativo"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEditModal(dish)}>
-                        <Edit className="h-4 w-4 mr-2" /> Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleToggleActive(dish.id, dish.isAvailable)}>
-                        {dish.isAvailable ? (
-                          <>
-                            <EyeOff className="h-4 w-4 mr-2" /> Desativar
-                          </>
-                        ) : (
-                          <>
-                            <Eye className="h-4 w-4 mr-2" /> Ativar
-                          </>
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setDishToDelete(dish.id)
-                          setIsDeleteDialogOpen(true)
-                        }}
-                        className="text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" /> Excluir
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-
-              {/* Desktop view */}
-              <div className="col-span-1 hidden md:block">
-                <div className="relative w-12 h-12">
-                  <Image src={dish.image || "/placeholder.svg"} alt={dish.name} fill className="object-cover" />
-                </div>
-              </div>
-              <div className="col-span-3 hidden md:block">{dish.name}</div>
-              <div className="col-span-3 hidden md:block text-sm text-neutral-600 line-clamp-2">{dish.description}</div>
-              <div className="col-span-1 hidden md:block">{formatCurrency(dish.price)}</div>
-              <div className="col-span-2 hidden md:flex items-center">
-                <span
-                  className={`px-2 py-1 text-xs rounded-full ${dish.isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
-                >
-                  {dish.isAvailable ? "Ativo" : "Inativo"}
-                </span>
-              </div>
-              <div className="col-span-2 hidden md:flex justify-end space-x-2">
-                <Button variant="outline" size="sm" onClick={() => openEditModal(dish)}>
-                  <Edit className="h-4 w-4 mr-2" /> Editar
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => handleToggleActive(dish.id, dish.isAvailable)}>
-                  {dish.isAvailable ? (
-                    <>
-                      <EyeOff className="h-4 w-4 mr-2" /> Desativar
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="h-4 w-4 mr-2" /> Ativar
-                    </>
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-red-600 border-red-200 hover:bg-red-50"
-                  onClick={() => {
-                    setDishToDelete(dish.id)
-                    setIsDeleteDialogOpen(true)
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirmar exclusão</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja excluir este prato? Esta ação não pode ser desfeita.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex space-x-2 justify-end">
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteDish}>
-              Excluir
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Dish Dialog - Simplificado para este exemplo */}
-      {editingDish && (
-        <Dialog open={!!editingDish} onOpenChange={() => { setEditingDish(null); setEditForm(null); }}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Editar Prato</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <label className="block text-sm">Nome</label>
-              <input
-                className="w-full border rounded px-2 py-1"
-                value={editForm?.name || ""}
-                onChange={e => setEditForm(f => ({ ...f!, name: e.target.value }))}
-              />
-              <label className="block text-sm">Descrição</label>
-              <textarea
-                className="w-full border rounded px-2 py-1"
-                value={editForm?.description || ""}
-                onChange={e => setEditForm(f => ({ ...f!, description: e.target.value }))}
-              />
-              <label className="block text-sm">Preço</label>
-              <input
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="price">Preço (R$) *</Label>
+              <Input
+                id="price"
+                name="price"
                 type="number"
-                className="w-full border rounded px-2 py-1"
-                value={editForm?.price || ""}
-                onChange={e => setEditForm(f => ({ ...f!, price: Number(e.target.value) }))}
+                step="0.01"
+                min="0"
+                value={formData.price}
+                onChange={handleChange}
+                className="mt-1"
+                required
               />
-              <label className="block text-sm">Categoria</label>
-              <input
-                className="w-full border rounded px-2 py-1"
-                value={editForm?.category || ""}
-                onChange={e => setEditForm(f => ({ ...f!, category: e.target.value }))}
-              />
-              <label className="block text-sm">Ingredientes (separados por vírgula)</label>
-              <input
-                className="w-full border rounded px-2 py-1"
-                value={editForm?.ingredients?.join(", ") || ""}
-                onChange={e => setEditForm(f => ({ ...f!, ingredients: e.target.value.split(",").map(i => i.trim()) }))}
-              />
-              <label className="block text-sm">Tempo de preparo (min)</label>
-              <input
-                type="number"
-                className="w-full border rounded px-2 py-1"
-                value={editForm?.preparationTime || ""}
-                onChange={e => setEditForm(f => ({ ...f!, preparationTime: Number(e.target.value) }))}
-              />
-              <label className="block text-sm">Informações Nutricionais (calorias, proteína, carboidratos, gordura)</label>
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="number"
-                  placeholder="Calorias"
-                  className="border rounded px-2 py-1"
-                  value={editForm?.nutritionalInfo?.calories || ""}
-                  onChange={e => setEditForm(f => ({ ...f!, nutritionalInfo: { ...f!.nutritionalInfo, calories: Number(e.target.value) } }))}
-                />
-                <input
-                  type="number"
-                  placeholder="Proteína"
-                  className="border rounded px-2 py-1"
-                  value={editForm?.nutritionalInfo?.protein || ""}
-                  onChange={e => setEditForm(f => ({ ...f!, nutritionalInfo: { ...f!.nutritionalInfo, protein: Number(e.target.value) } }))}
-                />
-                <input
-                  type="number"
-                  placeholder="Carboidratos"
-                  className="border rounded px-2 py-1"
-                  value={editForm?.nutritionalInfo?.carbs || ""}
-                  onChange={e => setEditForm(f => ({ ...f!, nutritionalInfo: { ...f!.nutritionalInfo, carbs: Number(e.target.value) } }))}
-                />
-                <input
-                  type="number"
-                  placeholder="Gordura"
-                  className="border rounded px-2 py-1"
-                  value={editForm?.nutritionalInfo?.fat || ""}
-                  onChange={e => setEditForm(f => ({ ...f!, nutritionalInfo: { ...f!.nutritionalInfo, fat: Number(e.target.value) } }))}
-                />
-              </div>
             </div>
-            <DialogFooter>
-              <Button onClick={() => { setEditingDish(null); setEditForm(null); }} variant="outline">Cancelar</Button>
-              <Button onClick={handleEditSave} disabled={isSavingEdit}>
-                {isSavingEdit ? "Salvando..." : "Salvar"}
+
+            <div>
+              <Label htmlFor="category">Categoria *</Label>
+              <Select value={formData.category} onValueChange={handleCategoryChange} required>
+                <SelectTrigger id="category" className="mt-1">
+                  <SelectValue placeholder="Selecione uma categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Ingredientes */}
+          <div>
+            <Label>Ingredientes *</Label>
+            <div className="flex gap-2 mt-1">
+              <Input
+                value={newIngredient}
+                onChange={(e) => setNewIngredient(e.target.value)}
+                placeholder="Digite um ingrediente"
+                className="flex-1"
+              />
+              <Button type="button" onClick={handleAddIngredient}>
+                <Plus className="h-4 w-4" />
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {formData.ingredients.map((ingredient, index) => (
+                <Badge key={index} variant="secondary" className="px-3 py-1">
+                  {ingredient}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveIngredient(index)}
+                    className="ml-2 hover:text-red-500"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Tempo de Preparo */}
+          <div>
+            <Label htmlFor="preparationTime">Tempo de Preparo (minutos) *</Label>
+            <Input
+              id="preparationTime"
+              name="preparationTime"
+              type="number"
+              min="0"
+              value={formData.preparationTime}
+              onChange={handleChange}
+              className="mt-1"
+              required
+            />
+          </div>
+
+          {/* Informações Nutricionais */}
+          <div>
+            <Label>Informações Nutricionais *</Label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-1">
+              <div>
+                <Label htmlFor="calories" className="text-sm">Calorias (kcal)</Label>
+                <Input
+                  id="calories"
+                  name="nutritionalInfo.calories"
+                  type="number"
+                  min="0"
+                  value={formData.nutritionalInfo.calories}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="protein" className="text-sm">Proteínas (g)</Label>
+                <Input
+                  id="protein"
+                  name="nutritionalInfo.protein"
+                  type="number"
+                  min="0"
+                  value={formData.nutritionalInfo.protein}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="carbs" className="text-sm">Carboidratos (g)</Label>
+                <Input
+                  id="carbs"
+                  name="nutritionalInfo.carbs"
+                  type="number"
+                  min="0"
+                  value={formData.nutritionalInfo.carbs}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="fat" className="text-sm">Gorduras (g)</Label>
+                <Input
+                  id="fat"
+                  name="nutritionalInfo.fat"
+                  type="number"
+                  min="0"
+                  value={formData.nutritionalInfo.fat}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Upload de Imagem */}
+          <div>
+            <Label>Imagem do Prato *</Label>
+            <div
+              className="mt-1 border-2 border-dashed border-neutral-300 rounded-sm p-4 text-center cursor-pointer hover:bg-neutral-50 transition-colors"
+              onClick={handleImageClick}
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleImageChange}
+              />
+
+              {imagePreview ? (
+                <div className="relative">
+                  <div className="relative h-48 w-full">
+                    <Image
+                      src={imagePreview}
+                      alt="Preview"
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="absolute top-2 right-2 bg-white rounded-full h-8 w-8"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeImage()
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Upload className="h-8 w-8 mx-auto text-neutral-400" />
+                  <div className="text-sm text-neutral-600">
+                    Clique para fazer upload ou arraste uma imagem
+                  </div>
+                  <div className="text-xs text-neutral-500">
+                    PNG, JPG ou WEBP (max. 5MB)
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? "Adicionando Prato..." : "Adicionar Prato"}
+        </Button>
+      </form>
     </div>
   )
 }
-
