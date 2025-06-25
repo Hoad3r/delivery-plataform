@@ -231,8 +231,13 @@ const fetchOrders = async (timeRange: string, startDate?: Date) => {
       }
     })
     
+    console.log(`Total de pedidos carregados: ${pedidosCarregados.length}`);
+    console.log("Status dos pedidos:", pedidosCarregados.map(p => p.status));
+    
     // Filtrar para considerar apenas pedidos entregues
     const completedOrders = pedidosCarregados.filter(order => order.status === 'delivered')
+    
+    console.log(`Pedidos entregues: ${completedOrders.length}`);
 
     // Se estiver usando filtro de tempo, aplique-o depois de carregar os dados
     // para garantir que o tratamento de data seja consistente
@@ -243,6 +248,7 @@ const fetchOrders = async (timeRange: string, startDate?: Date) => {
           return order.createdAt >= startDateValue
         })
 
+    console.log(`Pedidos filtrados por período: ${filtered.length}`);
     return filtered
   } catch (error) {
     console.error("Erro ao buscar pedidos:", error)
@@ -264,8 +270,8 @@ const processOrdersByMonth = (orders: any[]): OrderData[] => {
   orders.forEach(order => {
     if (!order.createdAt) return
     
-    // Converter a data ISO para objeto Date
-    const orderDate = new Date(order.createdAt)
+    // order.createdAt já é um objeto Date normalizado pela função normalizeFirestoreDate
+    const orderDate = order.createdAt
     const monthIndex = orderDate.getMonth()
     const month = months[monthIndex]
     
@@ -339,6 +345,7 @@ const processPopularDishes = (orders: any[]): PopularDish[] => {
 
 // Processar dados para pedidos por horário
 const processOrdersByTime = (orders: any[]): OrderByTime[] => {
+  // Inicializar slots de tempo padrão
   const timeSlots = [
     { time: "10-12h", orders: 0 },
     { time: "12-14h", orders: 0 },
@@ -348,11 +355,14 @@ const processOrdersByTime = (orders: any[]): OrderByTime[] => {
     { time: "20-22h", orders: 0 }
   ]
   
+  // Para capturar horários fora do intervalo padrão
+  const extraHours: Record<string, number> = {};
+  
   orders.forEach(order => {
-    if (!order.createdAt) return
+    if (!order.createdAt) return;
     
-    // Converter a data ISO para objeto Date
-    const orderDate = new Date(order.createdAt)
+    // order.createdAt já é um objeto Date normalizado pela função normalizeFirestoreDate
+    const orderDate = order.createdAt
     const hour = orderDate.getHours()
     
     if (hour >= 10 && hour < 12) timeSlots[0].orders++
@@ -361,9 +371,20 @@ const processOrdersByTime = (orders: any[]): OrderByTime[] => {
     else if (hour >= 16 && hour < 18) timeSlots[3].orders++
     else if (hour >= 18 && hour < 20) timeSlots[4].orders++
     else if (hour >= 20 && hour < 22) timeSlots[5].orders++
+    else {
+      // Capturar horários fora do intervalo padrão
+      const hourRange = `${hour}h-${hour+1}h`;
+      extraHours[hourRange] = (extraHours[hourRange] || 0) + 1;
+    }
   })
   
-  return timeSlots
+  // Adicionar horários extras se houver
+  const result = [...timeSlots];
+  Object.entries(extraHours).forEach(([timeRange, count]) => {
+    result.push({ time: timeRange, orders: count });
+  });
+  
+  return result;
 }
 
 // Processar dados para pedidos por dia da semana
@@ -374,8 +395,8 @@ const processWeeklyOrders = (orders: any[]): WeeklyOrder[] => {
   orders.forEach(order => {
     if (!order.createdAt) return
     
-    // Converter a data ISO para objeto Date
-    const orderDate = new Date(order.createdAt)
+    // order.createdAt já é um objeto Date normalizado pela função normalizeFirestoreDate
+    const orderDate = order.createdAt
     const dayIndex = orderDate.getDay()
     dayCount[dayIndex].orders++
   })
@@ -447,8 +468,8 @@ const processRecentOrders = (orders: any[]): RecentOrder[] => {
   const processedOrders = orders
     .slice(0, 5) // Já está ordenado por data desc na consulta
     .map(order => {
-      // Converter a data ISO para objeto Date
-      const orderDate = order.createdAt ? new Date(order.createdAt) : new Date();
+      // order.createdAt já é um objeto Date normalizado pela função normalizeFirestoreDate
+      const orderDate = order.createdAt || new Date();
       
       // Usamos docId para operações no Firestore, mas exibimos o id na UI
       const processedOrder = {
@@ -685,10 +706,8 @@ export default function AdminDashboard() {
           });
         }
         
-  
-        
         // Considerar apenas pedidos que não foram cancelados
-        if (status !== 'cancelled' && userId) {
+        if (data.status !== 'cancelled' && userId) {
           customerCounts[userId] = (customerCounts[userId] || 0) + 1;
         }
       });
@@ -943,6 +962,7 @@ export default function AdminDashboard() {
     }
 
     if (!data || data.length === 0) {
+      console.log(`renderChart: Dados vazios para ${chartType}`);
       return (
         <div className="flex h-full items-center justify-center">
           <p className="text-neutral-500">Nenhum dado disponível</p>
@@ -950,13 +970,31 @@ export default function AdminDashboard() {
       );
     }
 
+    console.log(`renderChart: Verificando dados para ${chartType}:`, data);
+
     // Verificar se os dados têm valores significativos
-    const hasSignificantData = chartType.includes('pie') 
-      ? data.some(item => (item.value || item.orders || 0) > 0)
-      : data.some(item => {
-          const values = Object.values(item).filter(val => typeof val === 'number');
-          return values.some(val => val > 0);
-        });
+    let hasSignificantData = false;
+    
+    if (chartType.includes('pie')) {
+      hasSignificantData = data.some(item => (item.value || item.orders || 0) > 0);
+    } else if (chartType.includes('bar') || chartType.includes('line')) {
+      // Para gráficos de barra e linha, verificar se há pelo menos um valor maior que zero
+      hasSignificantData = data.some(item => {
+        const values = Object.values(item).filter(val => typeof val === 'number');
+        const hasPositiveValues = values.some(val => val > 0);
+        console.log(`Item ${JSON.stringify(item)} tem valores positivos:`, hasPositiveValues, values);
+        return hasPositiveValues;
+      });
+      
+      // Para gráficos de horário, ser mais tolerante - mostrar mesmo se só um horário tem dados
+      if (chartType.includes('time') || data[0]?.time) {
+        const totalOrders = data.reduce((sum, item) => sum + (item.orders || 0), 0);
+        hasSignificantData = totalOrders > 0;
+        console.log(`Gráfico de horário - total de pedidos: ${totalOrders}, mostrar: ${hasSignificantData}`);
+      }
+    }
+
+    console.log(`renderChart: Dados significativos para ${chartType}:`, hasSignificantData);
 
     if (!hasSignificantData) {
       return (
