@@ -450,32 +450,72 @@ export default function AdminOrders() {
                   },
                   body: JSON.stringify({
                     to: customerEmail,
-                    subject: `Atualização do Pedido #${updatedOrder.id}`,
+                    subject: `📋 Atualização do Pedido #${updatedOrder.id} - ${statusInfo[newStatus].label}`,
                     html: `
-                      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
-                        <h2 style="color: #333; text-align: center;">Olá ${updatedOrder.user.name}!</h2>
-                        <p style="font-size: 16px;">Seu pedido #${updatedOrder.id} foi atualizado para: <strong>${statusInfo[newStatus].label}</strong></p>
+                      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px; background-color: #f8fafc;">
+                        <div style="text-align: center; margin-bottom: 20px;">
+                          <h1 style="color: #1e40af; margin: 0;">📋 ATUALIZAÇÃO DO PEDIDO</h1>
+                          <p style="color: #1e40af; font-size: 18px; font-weight: bold; margin: 5px 0;">Pedido #${updatedOrder.id}</p>
+                        </div>
                         
-                        <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                          <h3 style="color: #1e293b; margin-top: 0;">Detalhes do pedido:</h3>
-                          <ul style="list-style: none; padding: 0;">
-                            ${updatedOrder.items.map(item => `
-                              <li style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
-                                ${item.quantity}x ${item.name} - R$ ${(item.price * item.quantity).toFixed(2)}
-                              </li>
-                            `).join('')}
-                          </ul>
+                        <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #1e40af; margin-bottom: 20px;">
+                          <h2 style="color: #1e293b; margin-top: 0;">🔄 Status Atualizado</h2>
+                          <p style="font-size: 16px; color: #374151;">Seu pedido foi atualizado para: <strong style="color: #1e40af;">${statusInfo[newStatus].label}</strong></p>
                         </div>
 
-                        <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                          <p style="margin: 5px 0;"><strong>Total do pedido:</strong> R$ ${updatedOrder.payment.total.toFixed(2)}</p>
-                          <p style="margin: 5px 0;"><strong>Método de pagamento:</strong> ${paymentMethodInfo[updatedOrder.payment.paymentMethod]?.label || paymentMethodInfo.unknown.label}</p>
-                          <p style="margin: 5px 0;"><strong>Método de entrega:</strong> ${updatedOrder.type === 'delivery' ? 'Entrega' : 'Retirada'}</p>
-                          ${updatedOrder.notes ? `<p style="margin: 5px 0;"><strong>Observações:</strong> ${updatedOrder.notes}</p>` : ''}
+                        <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                          <h3 style="color: #1e293b; margin-top: 0;">📋 Seu Pedido:</h3>
+                          <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px;">
+                            <ul style="list-style: none; padding: 0; margin: 0;">
+                              ${updatedOrder.items.map(item => `
+                                <li style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;">
+                                  <span><strong>${item.quantity}x</strong> ${item.name}</span>
+                                  <span style="font-weight: bold;">R$ ${(item.price * item.quantity).toFixed(2)}</span>
+                                </li>
+                              `).join('')}
+                            </ul>
+                          </div>
                         </div>
 
-                        <p style="text-align: center; color: #64748b; font-size: 14px;">Agradecemos a preferência!</p>
-                        <p style="text-align: center; color: #64748b; font-size: 14px;">Nossa Cozinha</p>
+                        <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                          <h3 style="color: #1e293b; margin-top: 0;">💰 Informações do Pedido:</h3>
+                          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div>
+                              <strong>Total:</strong> R$ ${updatedOrder.payment.total.toFixed(2)}
+                            </div>
+                            <div>
+                              <strong>Método:</strong> ${paymentMethodInfo[updatedOrder.payment.paymentMethod]?.label || paymentMethodInfo.unknown.label}
+                            </div>
+                            <div>
+                              <strong>Status:</strong> <span style="color: #1e40af; font-weight: bold;">${statusInfo[newStatus].label}</span>
+                            </div>
+                            <div>
+                              <strong>Entrega:</strong> ${updatedOrder.type === 'delivery' ? 'Entrega' : 'Retirada'}
+                            </div>
+                          </div>
+                        </div>
+
+                        ${updatedOrder.notes ? `
+                          <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                            <h3 style="color: #1e293b; margin-top: 0;">📝 Observações:</h3>
+                            <p style="background-color: #fef3c7; padding: 10px; border-radius: 5px; margin: 0;">${updatedOrder.notes}</p>
+                          </div>
+                        ` : ''}
+
+                        <div style="background-color: #dbeafe; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #3b82f6;">
+                          <h3 style="color: #1e40af; margin-top: 0;">📊 STATUS ATUALIZADO</h3>
+                          <p style="color: #1e40af; font-size: 16px; font-weight: bold; margin: 0;">
+                            ${statusInfo[newStatus].label}
+                          </p>
+                          <p style="color: #1e40af; font-size: 14px; margin: 5px 0 0 0;">
+                            Seu pedido foi atualizado com sucesso!
+                          </p>
+                        </div>
+
+                        <div style="text-align: center; margin-top: 20px; color: #64748b; font-size: 14px;">
+                          <p>Agradecemos a preferência!</p>
+                          <p><strong>Nossa Cozinha</strong></p>
+                        </div>
                       </div>
                     `
                   }),
@@ -580,32 +620,72 @@ export default function AdminOrders() {
             },
             body: JSON.stringify({
               to: pedido.user.email,
-              subject: `Atualização do Pedido #${pedido.id}`,
+              subject: `📋 Atualização do Pedido #${pedido.id} - ${statusInfo[newStatus].label}`,
               html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
-                  <h2 style="color: #333; text-align: center;">Olá ${pedido.user.name}!</h2>
-                  <p style="font-size: 16px;">Seu pedido #${pedido.id} foi atualizado para: <strong>${statusInfo[newStatus].label}</strong></p>
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px; background-color: #f8fafc;">
+                  <div style="text-align: center; margin-bottom: 20px;">
+                    <h1 style="color: #1e40af; margin: 0;">📋 ATUALIZAÇÃO DO PEDIDO</h1>
+                    <p style="color: #1e40af; font-size: 18px; font-weight: bold; margin: 5px 0;">Pedido #${pedido.id}</p>
+                  </div>
                   
-                  <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                    <h3 style="color: #1e293b; margin-top: 0;">Detalhes do pedido:</h3>
-                    <ul style="list-style: none; padding: 0;">
-                      ${pedido.items.map(item => `
-                        <li style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
-                          ${item.quantity}x ${item.name} - R$ ${(item.price * item.quantity).toFixed(2)}
-                        </li>
-                      `).join('')}
-                    </ul>
+                  <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #1e40af; margin-bottom: 20px;">
+                    <h2 style="color: #1e293b; margin-top: 0;">🔄 Status Atualizado</h2>
+                    <p style="font-size: 16px; color: #374151;">Seu pedido foi atualizado para: <strong style="color: #1e40af;">${statusInfo[newStatus].label}</strong></p>
                   </div>
 
-                  <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                    <p style="margin: 5px 0;"><strong>Total do pedido:</strong> R$ ${pedido.payment.total.toFixed(2)}</p>
-                    <p style="margin: 5px 0;"><strong>Método de pagamento:</strong> ${paymentMethodInfo[pedido.payment.paymentMethod]?.label || paymentMethodInfo.unknown.label}</p>
-                    <p style="margin: 5px 0;"><strong>Método de entrega:</strong> ${pedido.type === 'delivery' ? 'Entrega' : 'Retirada'}</p>
-                    ${pedido.notes ? `<p style="margin: 5px 0;"><strong>Observações:</strong> ${pedido.notes}</p>` : ''}
+                  <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="color: #1e293b; margin-top: 0;">📋 Seu Pedido:</h3>
+                    <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px;">
+                      <ul style="list-style: none; padding: 0; margin: 0;">
+                        ${pedido.items.map(item => `
+                          <li style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;">
+                            <span><strong>${item.quantity}x</strong> ${item.name}</span>
+                            <span style="font-weight: bold;">R$ ${(item.price * item.quantity).toFixed(2)}</span>
+                          </li>
+                        `).join('')}
+                      </ul>
+                    </div>
                   </div>
 
-                  <p style="text-align: center; color: #64748b; font-size: 14px;">Agradecemos a preferência!</p>
-                  <p style="text-align: center; color: #64748b; font-size: 14px;">Nossa Cozinha</p>
+                  <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="color: #1e293b; margin-top: 0;">💰 Informações do Pedido:</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                      <div>
+                        <strong>Total:</strong> R$ ${pedido.payment.total.toFixed(2)}
+                      </div>
+                      <div>
+                        <strong>Método:</strong> ${paymentMethodInfo[pedido.payment.paymentMethod]?.label || paymentMethodInfo.unknown.label}
+                      </div>
+                      <div>
+                        <strong>Status:</strong> <span style="color: #1e40af; font-weight: bold;">${statusInfo[newStatus].label}</span>
+                      </div>
+                      <div>
+                        <strong>Entrega:</strong> ${pedido.type === 'delivery' ? 'Entrega' : 'Retirada'}
+                      </div>
+                    </div>
+                  </div>
+
+                  ${pedido.notes ? `
+                    <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                      <h3 style="color: #1e293b; margin-top: 0;">📝 Observações:</h3>
+                      <p style="background-color: #fef3c7; padding: 10px; border-radius: 5px; margin: 0;">${pedido.notes}</p>
+                    </div>
+                  ` : ''}
+
+                  <div style="background-color: #dbeafe; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #3b82f6;">
+                    <h3 style="color: #1e40af; margin-top: 0;">📊 STATUS ATUALIZADO</h3>
+                    <p style="color: #1e40af; font-size: 16px; font-weight: bold; margin: 0;">
+                      ${statusInfo[newStatus].label}
+                    </p>
+                    <p style="color: #1e40af; font-size: 14px; margin: 5px 0 0 0;">
+                      Seu pedido foi atualizado com sucesso!
+                    </p>
+                  </div>
+
+                  <div style="text-align: center; margin-top: 20px; color: #64748b; font-size: 14px;">
+                    <p>Agradecemos a preferência!</p>
+                    <p><strong>Nossa Cozinha</strong></p>
+                  </div>
                 </div>
               `
             }),
