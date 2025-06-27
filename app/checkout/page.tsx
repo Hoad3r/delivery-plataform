@@ -79,6 +79,7 @@ export default function CheckoutPage() {
   const [paymentId, setPaymentId] = useState<string | null>(null)
   const [currentOrderDocId, setCurrentOrderDocId] = useState<string | null>(null)
   const [addressChanged, setAddressChanged] = useState(0)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   // Initialize form
   const form = useForm<CheckoutFormValues>({
@@ -419,17 +420,20 @@ export default function CheckoutPage() {
   // Função para gerar novo QR Code PIX para pedido existente
   const generateNewPixForOrder = async (orderDocId: string) => {
     try {
+      setErrorMsg(null)
       console.log('🔄 Gerando novo PIX para pedido:', orderDocId)
       const orderRef = doc(db, 'orders', orderDocId)
       const orderDoc = await getDoc(orderRef)
 
       if (!orderDoc.exists()) {
         console.log('❌ Pedido não encontrado')
+        setErrorMsg('Pedido não encontrado. Verifique o link ou tente novamente.')
         toast({
           title: "Erro",
           description: "Pedido não encontrado.",
           variant: "destructive"
         })
+        setIsProcessingOrder(false)
         return
       }
 
@@ -437,11 +441,13 @@ export default function CheckoutPage() {
       
       if (orderData.status !== 'payment_pending') {
         console.log('❌ Pedido não está pendente de pagamento')
+        setErrorMsg('Este pedido não está mais pendente de pagamento.')
         toast({
           title: "Erro",
           description: "Este pedido não está mais pendente de pagamento.",
           variant: "destructive"
         })
+        setIsProcessingOrder(false)
         return
       }
 
@@ -464,12 +470,14 @@ export default function CheckoutPage() {
           status: response.status,
           data: errorData
         })
+        setErrorMsg(errorData.error || 'Erro ao gerar PIX. Tente novamente.')
         throw new Error(errorData.error || 'Erro ao gerar PIX')
       }
 
       const data = await response.json()
 
       if (!data.qr_code || !data.qr_code_base64) {
+        setErrorMsg('QR Code não encontrado na resposta. Tente novamente.')
         throw new Error('QR Code não encontrado na resposta')
       }
 
@@ -478,10 +486,12 @@ export default function CheckoutPage() {
       setPaymentId(data.id)
       setCurrentOrderDocId(orderDocId)
       setIsProcessingOrder(false)
+      setErrorMsg(null)
 
       console.log('✅ Novo QR Code PIX gerado com sucesso')
     } catch (error) {
       console.error('❌ Erro ao gerar novo PIX:', error)
+      setErrorMsg(error instanceof Error ? error.message : "Não foi possível gerar o novo PIX. Tente novamente.")
       toast({
         title: "Erro",
         description: error instanceof Error ? error.message : "Não foi possível gerar o novo PIX. Tente novamente.",
@@ -707,15 +717,50 @@ export default function CheckoutPage() {
 
   // Don't render anything until component is mounted or cart is empty
   if (!mounted || (cart.length === 0 && !searchParams.get('orderId'))) {
-    return null
+    // Mostra um loading global enquanto o componente não está montado
+    return (
+      <div className="container mx-auto px-4 py-24 max-w-3xl pt-28">
+        <div className="bg-white border border-neutral-200 rounded-sm overflow-hidden shadow-sm p-8">
+          <div className="flex flex-col items-center justify-center text-center space-y-4">
+            <div className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+            <h2 className="text-2xl font-light">QR Code PIX sendo gerado...</h2>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const subtotal = cart.reduce((total, item) => total + (item.price || 0) * (item.quantity || 1), 0)
   const deliveryFee = deliveryMethod === "delivery" ? 5.0 : 0
   const total = subtotal + deliveryFee
 
-  // Se não há itens no carrinho mas há um orderId, mostrar apenas o modal do QR Code
+  // Se não há itens no carrinho mas há um orderId, mostrar loading ou erro
   if (cart.length === 0 && searchParams.get('orderId')) {
+    if (isProcessingOrder) {
+      return (
+        <div className="container mx-auto px-4 py-24 max-w-3xl pt-28">
+          <div className="bg-white border border-neutral-200 rounded-sm overflow-hidden shadow-sm p-8">
+            <div className="flex flex-col items-center justify-center text-center space-y-4">
+              <div className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+              <h2 className="text-2xl font-light">QR Code PIX sendo gerado...</h2>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    if (errorMsg) {
+      return (
+        <div className="container mx-auto px-4 py-24 max-w-3xl pt-28">
+          <div className="bg-white border border-red-200 rounded-sm overflow-hidden shadow-sm p-8">
+            <div className="flex flex-col items-center justify-center text-center space-y-4">
+              <h2 className="text-2xl font-light text-red-600">Erro ao buscar pedido</h2>
+              <p className="text-neutral-500">{errorMsg}</p>
+              <Button onClick={() => window.location.href = '/checkout'}>Voltar para o checkout</Button>
+            </div>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="container mx-auto px-4 py-24 max-w-6xl mt-20 relative z-20">
         <div className="mb-8">
@@ -727,7 +772,7 @@ export default function CheckoutPage() {
           <div className="bg-white border border-neutral-200 rounded-sm overflow-hidden shadow-sm p-8">
             <div className="flex flex-col items-center justify-center text-center space-y-4">
               <div className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-              <h2 className="text-2xl font-light">Gerando QR Code PIX...</h2>
+              <h2 className="text-2xl font-light">QR Code PIX sendo gerado...</h2>
               <p className="text-neutral-500">Por favor, aguarde enquanto geramos o QR Code para pagamento.</p>
             </div>
           </div>
@@ -744,7 +789,7 @@ export default function CheckoutPage() {
 
         {pixQrCode && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white p-8 max-w-md w-full mx-4">
+            <div className="bg-white p-8 max-w-md w-full mx-4 max-h-screen overflow-y-auto">
               <div className="flex flex-col items-center justify-center text-center space-y-6">
                 <h2 className="text-2xl font-medium">Pague com PIX</h2>
                 
@@ -1229,7 +1274,6 @@ export default function CheckoutPage() {
                     type="submit"
                     className="w-full rounded-none bg-primary text-white hover:bg-primary/90"
                     disabled={isSubmitting || (deliveryMethod === "delivery" && (!form.getValues("streetName") || !form.getValues("postalCode") || !form.getValues("number")))}
-                    key={addressChanged}
                   >
                     {isSubmitting ? (
                       "Processando..."
@@ -1248,7 +1292,7 @@ export default function CheckoutPage() {
 
       {pixQrCode && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-8 max-w-md w-full mx-4">
+          <div className="bg-white p-8 max-w-md w-full mx-4 max-h-screen overflow-y-auto">
             <div className="flex flex-col items-center justify-center text-center space-y-6">
               <h2 className="text-2xl font-medium">Pague com PIX</h2>
               
