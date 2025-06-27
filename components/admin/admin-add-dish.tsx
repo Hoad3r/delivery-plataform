@@ -39,6 +39,7 @@ export default function AdminAddDish() {
       protein: "",
       carbs: "",
       fat: "",
+      fibras: "",
     },
   })
   const [newIngredient, setNewIngredient] = useState("")
@@ -177,6 +178,7 @@ export default function AdminAddDish() {
           protein: parseInt(formData.nutritionalInfo.protein),
           carbs: parseInt(formData.nutritionalInfo.carbs),
           fat: parseInt(formData.nutritionalInfo.fat),
+          fibras: parseInt(formData.nutritionalInfo.fibras),
         },
         isAvailable: true,
         image: imageUrl, // URL real da imagem no Firebase Storage
@@ -205,6 +207,7 @@ export default function AdminAddDish() {
           protein: "",
           carbs: "",
           fat: "",
+          fibras: "",
         },
       })
       setImagePreview(null)
@@ -335,7 +338,7 @@ export default function AdminAddDish() {
           {/* Informações Nutricionais */}
           <div>
             <Label>Informações Nutricionais *</Label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-1">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-1">
               <div>
                 <Label htmlFor="calories" className="text-sm">Calorias (kcal)</Label>
                 <Input
@@ -380,6 +383,18 @@ export default function AdminAddDish() {
                   type="number"
                   min="0"
                   value={formData.nutritionalInfo.fat}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="fibras" className="text-sm">Fibras (g)</Label>
+                <Input
+                  id="fibras"
+                  name="nutritionalInfo.fibras"
+                  type="number"
+                  min="0"
+                  value={formData.nutritionalInfo.fibras}
                   onChange={handleChange}
                   required
                 />
