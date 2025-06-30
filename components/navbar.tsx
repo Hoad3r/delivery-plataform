@@ -52,12 +52,12 @@ export default function Navbar() {
       }`}
     >
       <div className="w-full h-full px-0">
-        <div className="flex items-center justify-between h-full">
+        <div className="flex items-center justify-between h-full relative">
           <Link href="/" className="flex items-center h-full ml-0">
             <div className={`relative flex items-center justify-center transition-all duration-300 ${
               !isScrolled
-                ? "h-28 w-56 sm:h-56 sm:w-[400px] mt-6 ml-[-50px] sm:mt-0 sm:ml-0"
-                : "h-12 w-24 sm:h-12 sm:w-24 mt-0 ml-0"
+                ? "h-28 w-56 sm:h-40 sm:w-[400px] mt-6 ml-[-50px] sm:mt-0 sm:ml-0"
+                : "h-28 w-40 sm:h-28 sm:w-56 ml-0"
             }`}>
               <Image 
                 src="/images/logo.png" 
