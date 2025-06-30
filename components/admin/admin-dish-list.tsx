@@ -21,6 +21,8 @@ import { Dish } from "@/types/menu"
 import { collection, getDocs, onSnapshot, QuerySnapshot, DocumentData, doc, updateDoc, deleteDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useToast } from "@/hooks/use-toast"
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '@/lib/firebase';
 
 export default function AdminDishList() {
   const [dishes, setDishes] = useState<Dish[]>([])
@@ -36,7 +38,19 @@ export default function AdminDishList() {
   // Buscar pratos do Firestore
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "dishes"), (snapshot: QuerySnapshot<DocumentData>) => {
-      const pratos: Dish[] = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.data().id }))
+      const pratos: Dish[] = snapshot.docs.map(doc => ({
+        id: doc.data().id,
+        name: doc.data().name,
+        description: doc.data().description,
+        price: doc.data().price,
+        image: doc.data().image,
+        isAvailable: doc.data().isAvailable,
+        category: doc.data().category,
+        ingredients: doc.data().ingredients || [],
+        preparationTime: doc.data().preparationTime || 0,
+        nutritionalInfo: doc.data().nutritionalInfo || {},
+        options: doc.data().options || [],
+      }))
       setDishes(pratos)
     })
     return () => unsubscribe()
@@ -110,6 +124,7 @@ export default function AdminDishList() {
           ingredients: editForm.ingredients,
           preparationTime: editForm.preparationTime,
           nutritionalInfo: editForm.nutritionalInfo,
+          image: editForm.image || "",
         });
         toast({
           title: "Prato editado",
@@ -170,7 +185,7 @@ export default function AdminDishList() {
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex gap-3">
                     <div className="relative w-16 h-16 flex-shrink-0">
-                      <Image src={dish.image || "/placeholder.svg"} alt={dish.name} fill className="object-cover" />
+                      <Image src={dish.image && dish.image !== "" ? dish.image : "/placeholder.svg"} alt={dish.name} fill className="object-cover" />
                     </div>
                     <div>
                       <h3 className="font-medium text-sm">{dish.name}</h3>
@@ -223,7 +238,7 @@ export default function AdminDishList() {
               {/* Desktop view */}
               <div className="col-span-1 hidden md:block">
                 <div className="relative w-12 h-12">
-                  <Image src={dish.image || "/placeholder.svg"} alt={dish.name} fill className="object-cover" />
+                  <Image src={dish.image && dish.image !== "" ? dish.image : "/placeholder.svg"} alt={dish.name} fill className="object-cover" />
                 </div>
               </div>
               <div className="col-span-3 hidden md:block">{dish.name}</div>
@@ -291,11 +306,58 @@ export default function AdminDishList() {
       {/* Edit Dish Dialog - Simplificado para este exemplo */}
       {editingDish && (
         <Dialog open={!!editingDish} onOpenChange={() => { setEditingDish(null); setEditForm(null); }}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Editar Prato</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              {/* Upload de Imagem */}
+              <label className="block text-sm">Imagem do Prato</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    // Validação de tipo e tamanho
+                    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+                    if (!allowedTypes.includes(file.type)) {
+                      toast({
+                        title: "Tipo de arquivo não suportado",
+                        description: "Por favor, selecione uma imagem JPG, PNG ou WEBP.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    const maxSize = 5 * 1024 * 1024;
+                    if (file.size > maxSize) {
+                      toast({
+                        title: "Arquivo muito grande",
+                        description: "A imagem deve ter no máximo 5MB.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    // Upload para o Firebase Storage
+                    toast({
+                      title: "Fazendo upload da imagem...",
+                      description: "Aguarde enquanto processamos sua imagem.",
+                    });
+                    const imageRef = ref(storage, `dishes/${Date.now()}_${file.name}`);
+                    const uploadResult = await uploadBytes(imageRef, file);
+                    const imageUrl = await getDownloadURL(uploadResult.ref);
+                    setEditForm(f => ({ ...f!, image: imageUrl }));
+                  }
+                }}
+              />
+              <div className="w-32 h-32 relative">
+                <Image src={editForm?.image && editForm.image !== "" ? editForm.image : "/placeholder.svg"} alt="Imagem do prato" fill className="object-contain rounded" />
+                {editForm?.image && (
+                  <button type="button" className="absolute top-1 right-1 bg-white rounded-full shadow p-1" onClick={() => setEditForm(f => ({ ...f!, image: "" }))}>
+                    Remover
+                  </button>
+                )}
+              </div>
               <label className="block text-sm">Nome</label>
               <input
                 className="w-full border rounded px-2 py-1"
@@ -324,46 +386,113 @@ export default function AdminDishList() {
               <label className="block text-sm">Ingredientes (separados por vírgula)</label>
               <input
                 className="w-full border rounded px-2 py-1"
-                value={editForm?.ingredients?.join(", ") || ""}
+                value={editForm?.ingredients ? (editForm.ingredients as string[]).join(", ") : ""}
                 onChange={e => setEditForm(f => ({ ...f!, ingredients: e.target.value.split(",").map(i => i.trim()) }))}
               />
               <label className="block text-sm">Tempo de preparo (min)</label>
               <input
                 type="number"
                 className="w-full border rounded px-2 py-1"
-                value={editForm?.preparationTime || ""}
+                value={editForm?.preparationTime ?? ""}
                 onChange={e => setEditForm(f => ({ ...f!, preparationTime: Number(e.target.value) }))}
               />
-              <label className="block text-sm">Informações Nutricionais (calorias, proteína, carboidratos, gordura)</label>
+              <label className="block text-sm">Informações Nutricionais</label>
               <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="number"
-                  placeholder="Calorias"
-                  className="border rounded px-2 py-1"
-                  value={editForm?.nutritionalInfo?.calories || ""}
-                  onChange={e => setEditForm(f => ({ ...f!, nutritionalInfo: { ...f!.nutritionalInfo, calories: Number(e.target.value) } }))}
-                />
-                <input
-                  type="number"
-                  placeholder="Proteína"
-                  className="border rounded px-2 py-1"
-                  value={editForm?.nutritionalInfo?.protein || ""}
-                  onChange={e => setEditForm(f => ({ ...f!, nutritionalInfo: { ...f!.nutritionalInfo, protein: Number(e.target.value) } }))}
-                />
-                <input
-                  type="number"
-                  placeholder="Carboidratos"
-                  className="border rounded px-2 py-1"
-                  value={editForm?.nutritionalInfo?.carbs || ""}
-                  onChange={e => setEditForm(f => ({ ...f!, nutritionalInfo: { ...f!.nutritionalInfo, carbs: Number(e.target.value) } }))}
-                />
-                <input
-                  type="number"
-                  placeholder="Gordura"
-                  className="border rounded px-2 py-1"
-                  value={editForm?.nutritionalInfo?.fat || ""}
-                  onChange={e => setEditForm(f => ({ ...f!, nutritionalInfo: { ...f!.nutritionalInfo, fat: Number(e.target.value) } }))}
-                />
+                <div>
+                  <label className="text-xs">Calorias (kcal)</label>
+                  <input
+                    type="number"
+                    placeholder="Calorias"
+                    className="border rounded px-2 py-1 w-full"
+                    value={editForm?.nutritionalInfo?.calories ?? ""}
+                    onChange={e => setEditForm(f => ({
+                      ...f!,
+                      nutritionalInfo: {
+                        calories: Number(e.target.value),
+                        protein: f?.nutritionalInfo?.protein ?? 0,
+                        carbs: f?.nutritionalInfo?.carbs ?? 0,
+                        fat: f?.nutritionalInfo?.fat ?? 0,
+                        fibras: f?.nutritionalInfo?.fibras ?? 0,
+                      }
+                    }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs">Proteína (g)</label>
+                  <input
+                    type="number"
+                    placeholder="Proteína"
+                    className="border rounded px-2 py-1 w-full"
+                    value={editForm?.nutritionalInfo?.protein ?? ""}
+                    onChange={e => setEditForm(f => ({
+                      ...f!,
+                      nutritionalInfo: {
+                        calories: f?.nutritionalInfo?.calories ?? 0,
+                        protein: Number(e.target.value),
+                        carbs: f?.nutritionalInfo?.carbs ?? 0,
+                        fat: f?.nutritionalInfo?.fat ?? 0,
+                        fibras: f?.nutritionalInfo?.fibras ?? 0,
+                      }
+                    }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs">Carboidratos (g)</label>
+                  <input
+                    type="number"
+                    placeholder="Carboidratos"
+                    className="border rounded px-2 py-1 w-full"
+                    value={editForm?.nutritionalInfo?.carbs ?? ""}
+                    onChange={e => setEditForm(f => ({
+                      ...f!,
+                      nutritionalInfo: {
+                        calories: f?.nutritionalInfo?.calories ?? 0,
+                        protein: f?.nutritionalInfo?.protein ?? 0,
+                        carbs: Number(e.target.value),
+                        fat: f?.nutritionalInfo?.fat ?? 0,
+                        fibras: f?.nutritionalInfo?.fibras ?? 0,
+                      }
+                    }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs">Gordura (g)</label>
+                  <input
+                    type="number"
+                    placeholder="Gordura"
+                    className="border rounded px-2 py-1 w-full"
+                    value={editForm?.nutritionalInfo?.fat ?? ""}
+                    onChange={e => setEditForm(f => ({
+                      ...f!,
+                      nutritionalInfo: {
+                        calories: f?.nutritionalInfo?.calories ?? 0,
+                        protein: f?.nutritionalInfo?.protein ?? 0,
+                        carbs: f?.nutritionalInfo?.carbs ?? 0,
+                        fat: Number(e.target.value),
+                        fibras: f?.nutritionalInfo?.fibras ?? 0,
+                      }
+                    }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs">Fibras (g)</label>
+                  <input
+                    type="number"
+                    placeholder="Fibras"
+                    className="border rounded px-2 py-1 w-full"
+                    value={editForm?.nutritionalInfo?.fibras ?? ""}
+                    onChange={e => setEditForm(f => ({
+                      ...f!,
+                      nutritionalInfo: {
+                        calories: f?.nutritionalInfo?.calories ?? 0,
+                        protein: f?.nutritionalInfo?.protein ?? 0,
+                        carbs: f?.nutritionalInfo?.carbs ?? 0,
+                        fat: f?.nutritionalInfo?.fat ?? 0,
+                        fibras: Number(e.target.value),
+                      }
+                    }))}
+                  />
+                </div>
               </div>
             </div>
             <DialogFooter>
