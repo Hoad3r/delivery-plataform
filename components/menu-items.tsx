@@ -125,7 +125,7 @@ export default function MenuItems() {
         <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-0 bg-white rounded-2xl h-full">
           <div className="relative h-72">
             <Image
-              src={dish.image}
+              src={dish.image && dish.image !== "" ? dish.image : "/placeholder-logo.png"}
               alt={dish.name}
               fill
               className="object-cover transition-transform duration-500 group-hover:scale-110"
