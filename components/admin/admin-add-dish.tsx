@@ -137,8 +137,7 @@ export default function AdminAddDish() {
       !formData.price ||
       !formData.category ||
       !formData.ingredients.length ||
-      !formData.preparationTime ||
-      !imageFile
+      !formData.preparationTime
     ) {
       toast({
         title: "Erro ao adicionar prato",
@@ -151,20 +150,22 @@ export default function AdminAddDish() {
     setIsSubmitting(true)
 
     try {
-      // 1. Upload da imagem para o Firebase Storage
-      toast({
-        title: "Fazendo upload da imagem...",
-        description: "Aguarde enquanto processamos sua imagem.",
-      });
-
-      const imageRef = ref(storage, `dishes/${Date.now()}_${imageFile.name}`);
-      const uploadResult = await uploadBytes(imageRef, imageFile);
-      const imageUrl = await getDownloadURL(uploadResult.ref);
+      let imageUrl = null;
+      if (imageFile) {
+        // 1. Upload da imagem para o Firebase Storage
+        toast({
+          title: "Fazendo upload da imagem...",
+          description: "Aguarde enquanto processamos sua imagem.",
+        });
+        const imageRef = ref(storage, `dishes/${Date.now()}_${imageFile.name}`);
+        const uploadResult = await uploadBytes(imageRef, imageFile);
+        imageUrl = await getDownloadURL(uploadResult.ref);
+      }
 
       // 2. Gera um id único para o prato
       const generatedId = Date.now().toString();
 
-      // 3. Cria o prato com a URL da imagem
+      // 3. Cria o prato com a URL da imagem (se houver)
       const dishData = {
         id: generatedId,
         name: formData.name,
@@ -181,7 +182,7 @@ export default function AdminAddDish() {
           fibras: parseInt(formData.nutritionalInfo.fibras),
         },
         isAvailable: true,
-        image: imageUrl, // URL real da imagem no Firebase Storage
+        image: imageUrl || "", // Sempre string
         createdAt: new Date().toISOString(),
       }
 
