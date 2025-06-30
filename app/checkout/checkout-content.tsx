@@ -1,6 +1,6 @@
 "use client"
 // deploy
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -30,7 +30,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { useCart } from "@/context/cart-context"
 import { useAuth } from "@/context/auth-context"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, calcularDistanciaKm, calcularTaxaEntrega, buscarCoordenadasPorEndereco, RESTAURANTE_COORDS } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp, getDocs, query, doc, updateDoc, getDoc } from "firebase/firestore"
@@ -80,6 +80,11 @@ export default function CheckoutContent() {
   const [currentOrderDocId, setCurrentOrderDocId] = useState<string | null>(null)
   const [addressChanged, setAddressChanged] = useState(0)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [deliveryFee, setDeliveryFee] = useState(8.0)
+  const [deliveryError, setDeliveryError] = useState<string | null>(null)
+  const [calculandoEntrega, setCalculandoEntrega] = useState(false)
+  const debounceTimeout = useRef<NodeJS.Timeout | null>(null)
+  const lastAddressRef = useRef("")
 
   // Initialize form
   const form = useForm<CheckoutFormValues>({
@@ -179,7 +184,7 @@ export default function CheckoutContent() {
                             html: `
                               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px; background-color: #f8fafc;">
                                 <div style="text-align: center; margin-bottom: 20px;">
-                                  <h1 style="color: #059669; margin: 0;">�� PEDIDO PAGO!</h1>
+                                  <h1 style="color: #059669; margin: 0;">PEDIDO PAGO!</h1>
                                   <p style="color: #059669; font-size: 18px; font-weight: bold; margin: 5px 0;">Pedido #${orderData.id}</p>
                                 </div>
                                 <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #059669; margin-bottom: 20px;">
@@ -467,6 +472,51 @@ export default function CheckoutContent() {
     }
   }, [mounted, searchParams])
 
+  // Atualiza taxa de entrega automaticamente ao preencher endereço (com debounce)
+  useEffect(() => {
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current)
+    }
+    debounceTimeout.current = setTimeout(async () => {
+      if (deliveryMethod !== "delivery") {
+        setDeliveryFee(0)
+        setDeliveryError(null)
+        return
+      }
+      const street = form.getValues("streetName")
+      const number = form.getValues("number")
+      const cidade = "João Pessoa"
+      const uf = "PB"
+      if (!street || !number) {
+        setDeliveryFee(8.0)
+        setDeliveryError(null)
+        return
+      }
+      const enderecoCompleto = `${street}, ${number}, ${cidade}, ${uf}`
+      if (enderecoCompleto === lastAddressRef.current) return
+      setCalculandoEntrega(true)
+      setDeliveryError(null)
+      lastAddressRef.current = enderecoCompleto
+      const coords = await buscarCoordenadasPorEndereco(enderecoCompleto)
+      if (!coords) {
+        setDeliveryFee(8.0)
+        setDeliveryError("Não foi possível localizar o endereço. Verifique se está correto.")
+      } else {
+        const distancia = calcularDistanciaKm(RESTAURANTE_COORDS.lat, RESTAURANTE_COORDS.lon, coords.lat, coords.lon)
+        const taxa = calcularTaxaEntrega(distancia)
+        if (taxa === null) {
+          setDeliveryFee(0)
+          setDeliveryError("Endereço fora da área de entrega (máx. 10km do restaurante)")
+        } else {
+          setDeliveryFee(taxa)
+          setDeliveryError(null)
+        }
+      }
+      setCalculandoEntrega(false)
+    }, 700)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveryMethod, form.watch("streetName"), form.watch("number")])
+
   // Handle form submission
   async function onSubmit(values: CheckoutFormValues) {
     setIsSubmitting(true)
@@ -548,7 +598,7 @@ export default function CheckoutContent() {
         })),
         delivery: {
           address: values.deliveryMethod === 'delivery' ? 
-            `${values.streetName}, ${values.number}${values.complement ? ` - ${values.complement}` : ''}${values.referencePoint ? ` (${values.referencePoint})` : ''}` : 
+            `${values.streetName}, ${values.number}${values.complement ? ` - ${values.complement}` : ''}` : 
             null,
           time: values.deliveryMethod === 'delivery' ? '45 minutos' : '30 minutos'
         },
@@ -722,8 +772,7 @@ export default function CheckoutContent() {
 
   // Checkout normal
   const subtotal = cart.reduce((total, item) => total + (item.price || 0) * (item.quantity || 1), 0)
-  const deliveryFee = deliveryMethod === "delivery" ? 5.0 : 0
-  const total = subtotal + deliveryFee
+  const total = subtotal + (deliveryMethod === "delivery" ? deliveryFee : 0)
 
   return (
     <div className="container mx-auto px-4 py-24 max-w-6xl mt-20 relative z-20">
@@ -764,8 +813,11 @@ export default function CheckoutContent() {
                 </div>
                 <div className="flex justify-between">
                   <p>Taxa de entrega</p>
-                  <p>{formatCurrency(deliveryFee)}</p>
+                  <p>{deliveryMethod === "delivery" ? (calculandoEntrega ? "Calculando..." : `+${formatCurrency(deliveryFee)}`) : "Grátis"}</p>
                 </div>
+                {deliveryError && (
+                  <div className="text-sm text-red-600 mt-2">{deliveryError}</div>
+                )}
                 <Separator className="my-2" />
                 <div className="flex justify-between font-medium text-lg">
                   <p>Total</p>
@@ -808,7 +860,7 @@ export default function CheckoutContent() {
                                         <Truck className="h-4 w-4" /> Entrega
                                       </span>
                                       <Badge variant="outline" className="ml-2">
-                                        +R$ 5,00
+                                        {deliveryMethod === "delivery" ? (calculandoEntrega ? "Calculando..." : `+${formatCurrency(deliveryFee)}`) : "Grátis"}
                                       </Badge>
                                     </FormLabel>
                                     <p className="text-sm text-neutral-500">
