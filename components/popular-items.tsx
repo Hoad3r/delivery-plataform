@@ -64,7 +64,7 @@ export default function PopularItems() {
         {popularItems.map((item) => (
           <Card key={item.id} className="overflow-hidden cursor-pointer" onClick={() => handleAddToCart(item)}>
             <div className="relative h-48">
-              <Image src={item.image || "/placeholder.svg"} alt={item.name} fill className="object-cover" />
+              <Image src={item.image && item.image !== "" ? item.image : "/placeholder.svg"} alt={item.name} fill className="object-cover" />
             </div>
             <CardContent className="p-4">
               <h3 className="font-semibold text-lg mb-1">{item.name}</h3>
