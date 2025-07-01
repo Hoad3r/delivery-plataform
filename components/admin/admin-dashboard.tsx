@@ -1607,32 +1607,38 @@ export default function AdminDashboard() {
                 <CardDescription>Pedidos por região</CardDescription>
               </CardHeader>
               <CardContent>
-                <Suspense fallback={<div className="flex h-[300px] items-center justify-center"><p>Carregando mapa...</p></div>}>
-                  <LazyChart type="pie" data={ordersByLocation}>
-                    <Pie
-                      data={ordersByLocation}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }: { name: string; percent: number }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                      nameKey="name"
-                    >
-                      {ordersByLocation.map((entry: OrderByLocation, index: number) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value, name, props) => [
-                        `${typeof value === 'number' ? ((value / ordersByLocation.reduce((sum, item) => sum + (item.value || 0), 0)) * 100).toFixed(0) : 0}%`,
-                        name,
-                      ]}
-                    />
-                    <Legend />
-                  </LazyChart>
-                </Suspense>
+                {(!ordersByLocation || !Array.isArray(ordersByLocation) || ordersByLocation.length === 0) ? (
+                  <div className="flex h-[300px] items-center justify-center">
+                    <p className="text-neutral-500">Nenhum dado disponível para exibir o gráfico.</p>
+                  </div>
+                ) : (
+                  <Suspense fallback={<div className="flex h-[300px] items-center justify-center"><p>Carregando mapa...</p></div>}>
+                    <LazyChart type="pie" data={ordersByLocation}>
+                      <Pie
+                        data={ordersByLocation}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }: { name: string; percent: number }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                        nameKey="name"
+                      >
+                        {ordersByLocation.map((entry: OrderByLocation, index: number) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value, name, props) => [
+                          `${typeof value === 'number' ? ((value / ordersByLocation.reduce((sum, item) => sum + (item.value || 0), 0)) * 100).toFixed(0) : 0}%`,
+                          name,
+                        ]}
+                      />
+                      <Legend />
+                    </LazyChart>
+                  </Suspense>
+                )}
               </CardContent>
             </Card>
 
