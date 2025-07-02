@@ -24,6 +24,13 @@ import { useToast } from "@/hooks/use-toast"
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 
+const allCategories = [
+  { id: "tradicional", name: "Tradicional" },
+  { id: "fitness", name: "Fitness" },
+  { id: "vegetariana", name: "Vegetariana" },
+  { id: "Low Carb", name: "Low Carb" },
+]
+
 export default function AdminDishList() {
   const [dishes, setDishes] = useState<Dish[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -104,7 +111,14 @@ export default function AdminDishList() {
   // Função para abrir modal de edição com dados do prato
   const openEditModal = (dish: Dish) => {
     setEditingDish(dish)
-    setEditForm({ ...dish })
+    setEditForm({
+      ...dish,
+      categories: Array.isArray((dish as any).categories)
+        ? (dish as any).categories
+        : dish.category
+        ? [dish.category]
+        : [],
+    })
   }
 
   // Função para salvar edição
@@ -120,7 +134,7 @@ export default function AdminDishList() {
           name: editForm.name,
           description: editForm.description,
           price: editForm.price,
-          category: editForm.category,
+          categories: editForm.categories || [],
           ingredients: editForm.ingredients,
           preparationTime: editForm.preparationTime,
           nutritionalInfo: editForm.nutritionalInfo,
@@ -377,12 +391,34 @@ export default function AdminDishList() {
                 value={editForm?.price || ""}
                 onChange={e => setEditForm(f => ({ ...f!, price: Number(e.target.value) }))}
               />
-              <label className="block text-sm">Categoria</label>
-              <input
-                className="w-full border rounded px-2 py-1"
-                value={editForm?.category || ""}
-                onChange={e => setEditForm(f => ({ ...f!, category: e.target.value }))}
-              />
+              <label className="block text-sm">Categorias</label>
+              <div className="flex flex-wrap gap-4 mt-2">
+                {allCategories.map((category) => (
+                  <label key={category.id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      value={category.id}
+                      checked={editForm?.categories?.includes(category.id) || false}
+                      onChange={e => {
+                        if (!editForm) return;
+                        if (e.target.checked) {
+                          setEditForm(f => ({
+                            ...f!,
+                            categories: [...(f?.categories || []), category.id]
+                          }))
+                        } else {
+                          setEditForm(f => ({
+                            ...f!,
+                            categories: (f?.categories || []).filter(c => c !== category.id)
+                          }))
+                        }
+                      }}
+                      className="accent-[#DB775F]"
+                    />
+                    <span>{category.name}</span>
+                  </label>
+                ))}
+              </div>
               <label className="block text-sm">Ingredientes (separados por vírgula)</label>
               <input
                 className="w-full border rounded px-2 py-1"
