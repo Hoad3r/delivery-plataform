@@ -10,7 +10,7 @@ const categories = [
   { id: "tradicional", name: "Tradicionais" },
   { id: "fitness", name: "Fitness" },
   { id: "vegetariana", name: "Vegetarianas" },
-  { id: "lowcarb", name: "Low Carb" },
+  { id: "Low Carb", name: "Low Carb" },
 ]
 
 export default function MenuCategories() {
