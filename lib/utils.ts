@@ -55,10 +55,10 @@ export function calcularDistanciaKm(
 // Função para calcular a taxa de entrega baseada na distância
 export function calcularTaxaEntrega(distanciaKm: number): number | null {
   if (distanciaKm > 20) return null; // Fora da área de entrega
-  const taxaBase = 6.5;
+  const taxaBase = 6;
   if (distanciaKm <= 1) return taxaBase;
   // Para cada km adicional, soma 1.5
-  return parseFloat((taxaBase + (Math.ceil(distanciaKm - 1) * 1.25)).toFixed(2));
+  return parseFloat((taxaBase + (Math.ceil(distanciaKm - 1) * 1.20)).toFixed(2));
 }
 
 // Testes automáticos simples para calcularTaxaEntrega
