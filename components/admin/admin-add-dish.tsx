@@ -21,7 +21,7 @@ const categories = [
   { id: "tradicional", name: "Tradicional" },
   { id: "fitness", name: "Fitness" },
   { id: "vegetariana", name: "Vegetariana" },
-  { id: "lowcarb", name: "Low Carb" },
+  { id: "Low Carb", name: "Low Carb" },
 ]
 
 export default function AdminAddDish() {
@@ -31,7 +31,7 @@ export default function AdminAddDish() {
     name: "",
     description: "",
     price: "",
-    category: "",
+    categories: [] as string[],
     ingredients: [] as string[],
     preparationTime: "",
     nutritionalInfo: {
@@ -60,8 +60,8 @@ export default function AdminAddDish() {
     }
   }
 
-  const handleCategoryChange = (value: string) => {
-    setFormData((prev) => ({ ...prev, category: value }))
+  const handleCategoryChange = (values: string[]) => {
+    setFormData((prev) => ({ ...prev, categories: values }))
   }
 
   const handleAddIngredient = () => {
@@ -135,7 +135,7 @@ export default function AdminAddDish() {
       !formData.name ||
       !formData.description ||
       !formData.price ||
-      !formData.category ||
+      !formData.categories.length ||
       !formData.ingredients.length ||
       !formData.preparationTime
     ) {
@@ -171,7 +171,7 @@ export default function AdminAddDish() {
         name: formData.name,
         description: formData.description,
         price: parseFloat(formData.price),
-        category: formData.category,
+        categories: formData.categories,
         ingredients: formData.ingredients,
         preparationTime: parseInt(formData.preparationTime),
         nutritionalInfo: {
@@ -200,7 +200,7 @@ export default function AdminAddDish() {
         name: "",
         description: "",
         price: "",
-        category: "",
+        categories: [],
         ingredients: [],
         preparationTime: "",
         nutritionalInfo: {
@@ -275,19 +275,33 @@ export default function AdminAddDish() {
             </div>
 
             <div>
-              <Label htmlFor="category">Categoria *</Label>
-              <Select value={formData.category} onValueChange={handleCategoryChange} required>
-                <SelectTrigger id="category" className="mt-1">
-                  <SelectValue placeholder="Selecione uma categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Categorias *</Label>
+              <div className="flex flex-wrap gap-4 mt-2">
+                {categories.map((category) => (
+                  <label key={category.id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      value={category.id}
+                      checked={formData.categories.includes(category.id)}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setFormData(prev => ({
+                            ...prev,
+                            categories: [...prev.categories, category.id]
+                          }))
+                        } else {
+                          setFormData(prev => ({
+                            ...prev,
+                            categories: prev.categories.filter(c => c !== category.id)
+                          }))
+                        }
+                      }}
+                      className="accent-[#DB775F]"
+                    />
+                    <span>{category.name}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
 
