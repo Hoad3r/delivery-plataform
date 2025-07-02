@@ -11,12 +11,13 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useMenu } from "@/contexts/menu-context"
 import { formatCurrency } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
+import React from "react"
 
 const categories = [
-  { id: "tradicional", name: "Tradicionais" },
-  { id: "fitness", name: "Fitness" },
-  { id: "vegetariana", name: "Vegetarianas" },
-  { id: "lowcarb", name: "Low Carb" },
+  { id: "Fitness", name: "Fitness" },
+  { id: "Low Carb", name: "Low Carb" },
+  { id: "vegetariana", name: "Vegetariana" },
+  { id: "tradicional", name: "Tradicional" },
 ]
 
 export default function MenuItems() {
@@ -44,9 +45,22 @@ export default function MenuItems() {
   useEffect(() => {
     let filtered = dishes
 
+    // LOG: pratos disponíveis antes do filtro
+    console.log('Dishes disponíveis:', dishes)
+    console.log('Filtro de categoria:', categoryFilter)
+    console.log('Filtro de busca:', searchTerm)
+
     // Aplica filtro de categoria se existir e não estiver em mobile
     if (!isMobile && categoryFilter && categoryFilter !== "all") {
-      filtered = filtered.filter((item) => item.category === categoryFilter)
+      filtered = filtered.filter((item) => {
+        // Normaliza para comparar sem case sensitive e sem espaços extras
+        const categoriesArr: string[] = Array.isArray((item as any).categories) ? (item as any).categories : []
+        const normalize = (str: string) => str.replace(/\s+/g, '').toLowerCase()
+        const filterCategory = normalize(categoryFilter)
+        const match = categoriesArr.some((cat: string) => normalize(cat) === filterCategory)
+        console.log(`Comparando categorias do prato '${item.name}':`, categoriesArr, 'com', filterCategory, '?', match)
+        return match
+      })
     }
 
     // Aplica filtro de busca se existir
@@ -55,9 +69,12 @@ export default function MenuItems() {
         (item) =>
           item.name.toLowerCase().includes(searchTerm) ||
           item.description.toLowerCase().includes(searchTerm) ||
-          item.category.toLowerCase().includes(searchTerm)
+          (Array.isArray((item as any).categories) && (item as any).categories.some((cat: string) => cat.toLowerCase().includes(searchTerm)))
       )
     }
+
+    // LOG: pratos após filtro
+    console.log('Dishes após filtro:', filtered)
 
     setDisplayedItems(filtered)
   }, [categoryFilter, searchTerm, dishes, isMobile])
@@ -89,7 +106,7 @@ export default function MenuItems() {
             Fitness
           </Badge>
         )
-      case "lowcarb":
+      case "Low Carb":
         return (
           <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
             <Star className="w-3 h-3 mr-1" />
@@ -116,6 +133,7 @@ export default function MenuItems() {
     return (
       <motion.div
         key={dish.id}
+        layout
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
@@ -128,12 +146,22 @@ export default function MenuItems() {
               src={dish.image && dish.image !== "" ? dish.image : "/placeholder-logo.png"}
               alt={dish.name}
               fill
+              placeholder={dish.image && dish.image.startsWith('/') ? 'blur' : 'empty'}
               className="object-cover transition-transform duration-500 group-hover:scale-110"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
             
             <div className="absolute top-2 left-2 sm:top-4 sm:left-4 flex flex-col gap-2">
-              {getCategoryBadge(dish.category)}
+              {Array.isArray((dish as any).categories) && (dish as any).categories.length <= 2
+                ? (dish as any).categories.map((cat: string) => (
+                    <React.Fragment key={cat}>{getCategoryBadge(cat)}</React.Fragment>
+                  ))
+                : (
+                    <div className="flex flex-row gap-1">
+                      {(dish as any).categories.map((cat: string) => getCategoryStar(cat))}
+                    </div>
+                  )
+              }
             </div>
 
             <div className="absolute bottom-0 left-0 right-0 p-4">
@@ -223,17 +251,15 @@ export default function MenuItems() {
 
   return (
     <div ref={containerRef} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 mb-12">
-      <AnimatePresence mode="wait">
-        {displayedItems.length > 0 ? (
-          <>
-            {displayedItems.map((dish) => renderDishCard(dish, false))}
-            {/* Seção extra quando houver 2 ou 3 cards */}
-            {(displayedItems.length === 2 || displayedItems.length === 3) && (
-              <div className="col-span-1 sm:col-span-2 xl:col-span-3 h-[400px]"></div>
-            )}
-          </>
-        ) : null}
-      </AnimatePresence>
+      {displayedItems.length > 0 ? (
+        <>
+          {displayedItems.map((dish) => renderDishCard(dish, false))}
+          {/* Seção extra quando houver 2 ou 3 cards */}
+          {(displayedItems.length === 2 || displayedItems.length === 3) && (
+            <div className="col-span-1 sm:col-span-2 xl:col-span-3 h-[400px]"></div>
+          )}
+        </>
+      ) : null}
     </div>
   )
 }
