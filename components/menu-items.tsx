@@ -26,8 +26,8 @@ export default function MenuItems() {
   const searchTerm = searchParams.get("busca")?.toLowerCase() || ""
   const { addItem, cart, removeItem } = useCart()
   const containerRef = useRef(null)
-  const { dishes, selectedDate, selectedPeriod, getDishAvailability } = useMenu()
-  const [displayedItems, setDisplayedItems] = useState(dishes)
+  const { dishes = [], selectedDate, selectedPeriod, getDishAvailability } = useMenu()
+  const [displayedItems, setDisplayedItems] = useState(dishes || [])
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
@@ -125,6 +125,7 @@ export default function MenuItems() {
     }
   }
 
+
   const renderDishCard = (dish: any, isMobileCard = false) => {
     const availability = getDishAvailability(dish.id)
     const isAvailable = availability && availability.available > 0 && dish.isAvailable
@@ -152,16 +153,11 @@ export default function MenuItems() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
             
             <div className="absolute top-2 left-2 sm:top-4 sm:left-4 flex flex-col gap-2">
-              {Array.isArray((dish as any).categories) && (dish as any).categories.length <= 2
-                ? (dish as any).categories.map((cat: string) => (
-                    <React.Fragment key={cat}>{getCategoryBadge(cat)}</React.Fragment>
-                  ))
-                : (
-                    <div className="flex flex-row gap-1">
-                      {(dish as any).categories.map((cat: string) => getCategoryStar(cat))}
-                    </div>
-                  )
-              }
+              {Array.isArray((dish as any).categories) && (dish as any).categories.length > 0 && (
+                (dish as any).categories.map((cat: string) => (
+                  <React.Fragment key={cat}>{getCategoryBadge(cat)}</React.Fragment>
+                ))
+              )}
             </div>
 
             <div className="absolute bottom-0 left-0 right-0 p-4">
@@ -221,15 +217,20 @@ export default function MenuItems() {
               <div className="h-[1px] flex-1 bg-[#DB775F]/10"></div>
             </div>
             <div className="flex overflow-x-auto pb-6 -mx-4 pl-4 pr-4 gap-4 snap-x snap-mandatory scrollbar-hide">
-              {displayedItems.map((dish) => renderDishCard(dish, true))}
+              {Array.isArray(displayedItems) && displayedItems.map((dish) => renderDishCard(dish, true))}
             </div>
           </section>
         )}
 
         {/* Seções por Categoria */}
-        {!searchTerm && categories.map((category) => {
-          const categoryItems = dishes.filter(dish => dish.category === category.id)
-          if (categoryItems.length === 0) return null
+        {!searchTerm && Array.isArray(categories) && categories.map((category) => {
+          const categoryItems = Array.isArray(dishes)
+            ? dishes.filter((dish: import("@/types/menu").Dish) =>
+                Array.isArray(dish.categories) &&
+                dish.categories.some((cat: string) => cat.trim().toLowerCase() === category.id.trim().toLowerCase())
+              )
+            : []
+          if (!Array.isArray(categoryItems) || categoryItems.length === 0) return null
 
           return (
             <section key={category.id} className="w-full">
@@ -240,7 +241,7 @@ export default function MenuItems() {
                 <div className="h-[1px] flex-1 bg-[#DB775F]/10"></div>
               </div>
               <div className="flex overflow-x-auto pb-6 -mx-4 pl-4 pr-4 gap-4 snap-x snap-mandatory scrollbar-hide">
-                {categoryItems.map((dish) => renderDishCard(dish, true))}
+                {Array.isArray(categoryItems) && categoryItems.map((dish) => renderDishCard(dish, true))}
               </div>
             </section>
           )
@@ -251,11 +252,11 @@ export default function MenuItems() {
 
   return (
     <div ref={containerRef} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 mb-12">
-      {displayedItems.length > 0 ? (
+      {Array.isArray(displayedItems) && displayedItems.length > 0 ? (
         <>
-          {displayedItems.map((dish) => renderDishCard(dish, false))}
+          {Array.isArray(displayedItems) && displayedItems.map((dish) => renderDishCard(dish, false))}
           {/* Seção extra quando houver 2 ou 3 cards */}
-          {(displayedItems.length === 2 || displayedItems.length === 3) && (
+          {(Array.isArray(displayedItems) && (displayedItems.length === 2 || displayedItems.length === 3)) && (
             <div className="col-span-1 sm:col-span-2 xl:col-span-3 h-[400px]"></div>
           )}
         </>
