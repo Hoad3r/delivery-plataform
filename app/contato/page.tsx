@@ -1,12 +1,13 @@
 import Link from "next/link"
 import Image from "next/image"
+import { useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { MapPin, Clock, Mail, Phone } from "lucide-react"
 
 export default function ContatoPage() {
   // Número de WhatsApp (formato internacional sem símbolos)
-  const whatsappNumber = "5511987654321"
+  const whatsappNumber = "5583993865353"
 
   // Mensagem pré-definida (codificada para URL)
   const message = encodeURIComponent("Olá! Gostaria de saber mais sobre o restaurante e fazer um pedido.")
@@ -63,13 +64,14 @@ export default function ContatoPage() {
             <div className="bg-neutral-50 p-4 flex flex-col items-center text-center">
               <MapPin className="h-6 w-6 text-neutral-700 mb-3" />
               <h3 className="font-medium text-sm sm:text-base mb-2">Endereço</h3>
-              <p className="text-neutral-500 text-xs sm:text-sm">
-                Rua das Oliveiras, 123
-                <br />
-                Jardim Primavera
-                <br />
-                São Paulo, SP - 01234-567
-              </p>
+              <a
+                href="https://www.google.com/maps/search/?api=1&query=Av.+Eutiquiano+Barreto,+863"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#2F5F53] underline text-xs sm:text-sm hover:text-[#1d3c34] transition-colors"
+              >
+                Av. Eutiquiano Barreto, 863
+              </a>
             </div>
           </CardContent>
         </Card>
@@ -79,13 +81,16 @@ export default function ContatoPage() {
             <div className="bg-neutral-50 p-4 flex flex-col items-center text-center">
               <Phone className="h-6 w-6 text-neutral-700 mb-3" />
               <h3 className="font-medium text-sm sm:text-base mb-2">Telefones</h3>
-              <p className="text-neutral-500 text-xs sm:text-sm">
-                +55 (11) 3456-7890
-                <br />
-                +55 (11) 98765-4321
-                <br />
-                <span className="text-[#25D366] font-medium">WhatsApp</span>
-              </p>
+              <a
+                href="tel:+5583993865353"
+                className="text-[#2F5F53] underline text-xs sm:text-sm hover:text-[#1d3c34] transition-colors"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                +55 (83) 99386-5353
+              </a>
+              <br />
+              <span className="text-[#25D366] font-medium">WhatsApp</span>
             </div>
           </CardContent>
         </Card>
@@ -95,13 +100,14 @@ export default function ContatoPage() {
             <div className="bg-neutral-50 p-4 flex flex-col items-center text-center">
               <Mail className="h-6 w-6 text-neutral-700 mb-3" />
               <h3 className="font-medium text-sm sm:text-base mb-2">Email</h3>
-              <p className="text-neutral-500 text-xs sm:text-sm">
-                contato@restaurante.com
-                <br />
-                reservas@restaurante.com
-                <br />
-                &nbsp;
-              </p>
+              <a
+                href="mailto:nossacozinhajp@gmail.com"
+                className="text-[#2F5F53] underline text-xs sm:text-sm hover:text-[#1d3c34] transition-colors"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                nossacozinhajp@gmail.com
+              </a>
             </div>
           </CardContent>
         </Card>
@@ -112,11 +118,10 @@ export default function ContatoPage() {
               <Clock className="h-6 w-6 text-neutral-700 mb-3" />
               <h3 className="font-medium text-sm sm:text-base mb-2">Horários</h3>
               <p className="text-neutral-500 text-xs sm:text-sm">
-                Seg - Qui: 18h - 23h
+                Terças: 10h - 17h
                 <br />
-                Sex - Sáb: 18h - 00h
-                <br />
-                Dom: 12h - 22h
+                Quartas: 10h - 17h
+              
               </p>
             </div>
           </CardContent>
@@ -126,13 +131,17 @@ export default function ContatoPage() {
       {/* Mapa e mensagem final */}
       <div className="mt-12 sm:mt-16">
         <div className="relative h-[200px] sm:h-[300px] w-full bg-neutral-100 border border-neutral-200 mb-6 sm:mb-8">
-          {/* Aqui poderia ser integrado um mapa real como Google Maps */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center">
-              <MapPin className="h-8 w-8 text-neutral-400 mx-auto mb-2" />
-              <p className="text-neutral-500 text-xs sm:text-sm">Mapa interativo seria exibido aqui</p>
-            </div>
-          </div>
+          <iframe
+            title="Mapa - Av. Eutiquiano Barreto, 863"
+            src="https://www.google.com/maps?q=Av.+Eutiquiano+Barreto,+863&output=embed"
+            width="100%"
+            height="100%"
+            style={{ border: 0 }}
+            allowFullScreen
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            className="absolute inset-0 w-full h-full rounded"
+          ></iframe>
         </div>
 
         <div className="text-center">
