@@ -11,16 +11,21 @@ export default function SobrePage() {
       {/* História e Visão */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-16 items-center mb-16 sm:mb-24">
         <div className="order-2 md:order-1">
-          <h2 className="text-xl sm:text-2xl font-light mb-4 sm:mb-6">Uma jornada gastronômica</h2>
+          <h2 className="text-xl sm:text-2xl font-light mb-4 sm:mb-6">Uma ideia que nasceu entre amigos
+          </h2>
           <div className="space-y-4 text-sm sm:text-base text-neutral-700">
             <p>
-              Fundado em 2010, nosso restaurante nasceu da paixão por unir sabores autênticos e técnicas refinadas. O
-              que começou como um pequeno bistrô se transformou em um dos destinos gastronômicos mais respeitados da
-              cidade.
+              A Nossa Cozinha – Marmita Saudável nasceu em 2025, de uma vontade real de cuidar das pessoas. Em um mundo cada vez mais corrido, percebemos o quanto é difícil manter uma alimentação equilibrada, prática e gostosa.
             </p>
             <p>
-              Nossa cozinha combina tradição e inovação, sempre respeitando a sazonalidade e a origem dos ingredientes.
-              Cada prato conta uma história e proporciona uma experiência sensorial única.
+            Foi em uma conversa leve, entre um café e boas risadas, que os chefs Filipe e Marcela Rodriguez, junto da amiga e também chef Adriana Miranda, decidiram transformar essa necessidade comum em um projeto com propósito.
+            </p>
+            <p>
+            Mais do que entregar marmitas, queremos facilitar a rotina de quem busca saúde, leveza e sabor no dia a dia — com refeições pensadas por quem entende de cozinha e se importa com cada detalhe.
+
+            </p>
+            <p>
+            Somos uma cozinha de amigos, movida por afeto, ingredientes de verdade e o desejo de alimentar bem.
             </p>
           </div>
         </div>
@@ -43,29 +48,32 @@ export default function SobrePage() {
             que envolve todos os sentidos, criando memórias que perduram muito além da refeição."
           </p>
           <div className="w-16 h-[1px] bg-neutral-300 mx-auto mt-6 sm:mt-8"></div>
-          <p className="text-sm text-neutral-500 mt-4">— Chef Antonio Rossi</p>
+          <p className="text-sm text-neutral-500 mt-4">— Nossa Cozinha</p>
         </div>
       </div>
 
       {/* Chef e Equipe */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-16 items-center mb-16 sm:mb-24">
         <div className="relative h-[250px] sm:h-[400px] w-full">
-          <Image src="/placeholder.svg?height=800&width=600" alt="Nosso chef" fill className="object-cover" />
+          <Image src="/images/nossaequipe.jpg" alt="Nossa equipe" fill className="object-cover" />
         </div>
         <div>
           <h2 className="text-xl sm:text-2xl font-light mb-4 sm:mb-6">Nossa Equipe</h2>
           <div className="space-y-4 text-sm sm:text-base text-neutral-700">
             <p>
-              Liderada pelo chef Antonio Rossi, nossa equipe é composta por profissionais apaixonados e talentosos,
-              dedicados a oferecer uma experiência gastronômica excepcional.
+            A Nossa Cozinha – Marmita Saudável é conduzida por três profissionais apaixonados pela boa comida, pelo cuidado com as pessoas e pela vontade de transformar o cotidiano através da alimentação.
             </p>
             <p>
-              Da cozinha ao salão, cada membro contribui com sua expertise e paixão para criar um ambiente acolhedor e
-              uma experiência memorável para nossos clientes.
+            Chef Adriana Miranda Mota
+            Consultora de gastronomia com ampla experiência no setor de alimentação, Adriana é especialista em gestão de negócios e liderança de equipes de alta performance. Traz para o projeto um olhar técnico e estratégico, sempre focado em inovação, organização e excelência nos processos.
             </p>
             <p>
-              Investimos continuamente no desenvolvimento de nossa equipe, participando de workshops, viagens
-              gastronômicas e intercâmbios com outros restaurantes renomados.
+            Chef Filipe Rodriguez
+            Proprietário do restaurante Quintal Restô desde 2010, atua como chef consultor em restaurantes, hotéis, bares e cafeterias. Agora também se reinventa como corretor de imóveis, sem deixar de lado sua essência criativa e seu compromisso com a boa gastronomia. Filipe traz ao projeto sua vivência prática e seu olhar apurado para o sabor e apresentação.
+            </p>
+            <p>
+            Chef Marcela Rodriguez
+            Também à frente do Quintal Restô, hoje concentra sua atuação na gestão administrativa, comercial e de marketing da Nossa Cozinha. Estudante da área de tecnologia, com especialização em Desenvolvimento Back End Jr., une sensibilidade estética, organização e inovação digital à proposta do projeto.
             </p>
           </div>
         </div>
@@ -100,13 +108,17 @@ export default function SobrePage() {
       <div className="text-center max-w-3xl mx-auto">
         <h2 className="text-xl sm:text-2xl font-light mb-4 sm:mb-6">Nosso Compromisso</h2>
         <p className="text-sm sm:text-base text-neutral-700 mb-6">
-          Seja para um jantar romântico, uma celebração especial ou uma refeição casual, nosso compromisso é
-          proporcionar momentos memoráveis através de uma gastronomia de excelência e um atendimento atencioso.
+        Nosso compromisso é oferecer refeições saudáveis, saborosas e feitas com afeto, que respeitem o seu tempo e a sua saúde.
+        </p>
+        <p className="text-sm sm:text-base text-neutral-700 mb-6">
+        Cada marmita é pensada com responsabilidade e carinho, desde a escolha dos ingredientes até a entrega. Queremos estar presentes na sua rotina de forma leve, prática e nutritiva.
+
         </p>
         <p className="text-sm sm:text-base text-neutral-700">
-          Agradecemos a confiança de nossos clientes e esperamos continuar fazendo parte de suas histórias e momentos
-          especiais.
+        Agradecemos a confiança de cada cliente e seguimos com o propósito de alimentar bem — com verdade, equilíbrio e propósito.
         </p>
+
+
       </div>
     </div>
   )
