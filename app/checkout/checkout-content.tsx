@@ -50,6 +50,8 @@ const checkoutSchema = z.object({
   referencePoint: z.string().optional(),
   saveAddress: z.boolean().optional(),
   notes: z.string().optional(),
+  scheduledDate: z.string().min(1, "Escolha o dia da entrega"),
+  scheduledTime: z.string().min(1, "Escolha o horário da entrega"),
 }).refine((data) => {
   // Se for entrega, os campos de endereço são obrigatórios
   if (data.deliveryMethod === "delivery") {
@@ -86,6 +88,21 @@ export default function CheckoutContent() {
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null)
   const lastAddressRef = useRef("")
 
+  // Utilidades para datas
+  const diasSemana = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+  function getNextWeekdayDate(weekday: number) {
+    const today = new Date();
+    const result = new Date(today);
+    result.setDate(today.getDate() + ((7 + weekday - today.getDay()) % 7 || 7));
+    return result;
+  }
+  const terca = getNextWeekdayDate(2); // 2 = terça
+  const quarta = getNextWeekdayDate(3); // 3 = quarta
+  const tercaStr = terca.toLocaleDateString('pt-BR');
+  const quartaStr = quarta.toLocaleDateString('pt-BR');
+  const hoje = new Date();
+  const isHojeTercaOuQuarta = hoje.getDay() === 2 || hoje.getDay() === 3;
+
   // Initialize form
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
@@ -102,12 +119,16 @@ export default function CheckoutContent() {
       referencePoint: "",
       saveAddress: false,
       notes: "",
+      scheduledDate: isHojeTercaOuQuarta ? hoje.toLocaleDateString('pt-BR') : tercaStr,
+      scheduledTime: "",
     },
   })
 
   // Watch delivery method to conditionally show address field
   const deliveryMethod = form.watch("deliveryMethod")
   const paymentMethod = form.watch("paymentMethod")
+  const scheduledDate = form.watch("scheduledDate")
+  const scheduledTime = form.watch("scheduledTime")
 
   // Redirect if cart is empty
   useEffect(() => {
@@ -204,6 +225,13 @@ export default function CheckoutContent() {
                                     </ul>
                                   </div>
                                 </div>
+                                <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                  <h3 style="color: #166534; margin-top: 0;">📅 Entrega Agendada</h3>
+                                  <p style="font-size: 16px; color: #166534; margin: 0;">
+                                    <strong>Data:</strong> ${orderData.scheduledDate}<br/>
+                                    <strong>Horário:</strong> ${orderData.scheduledTime}
+                                  </p>
+                                </div>
                                 <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                                   <h3 style="color: #1e293b; margin-top: 0;">💰 Informações de Pagamento:</h3>
                                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -280,6 +308,13 @@ export default function CheckoutContent() {
                                     `).join('')}
                                   </ul>
                                 </div>
+                              </div>
+                              <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                <h3 style="color: #166534; margin-top: 0;">📅 Entrega Agendada</h3>
+                                <p style="font-size: 16px; color: #166534; margin: 0;">
+                                  <strong>Data:</strong> ${orderData.scheduledDate}<br/>
+                                  <strong>Horário:</strong> ${orderData.scheduledTime}
+                                </p>
                               </div>
                               <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                                 <h3 style="color: #1e293b; margin-top: 0;">💰 Informações de Pagamento:</h3>
@@ -576,6 +611,38 @@ export default function CheckoutContent() {
           });
         }
       }
+      // Garantir data e horário válidos
+      let scheduledDate = values.scheduledDate;
+      let scheduledTime = values.scheduledTime;
+      const horarios = ["10h - 12h", "12h - 14h", "14h - 17h"];
+      function getNextWeekdayDate(weekday: number) {
+        const today = new Date();
+        const result = new Date(today);
+        result.setDate(today.getDate() + ((7 + weekday - today.getDay()) % 7 || 7));
+        return result;
+      }
+      const hoje = new Date();
+      const isHojeTercaOuQuarta = hoje.getDay() === 2 || hoje.getDay() === 3;
+      if (!scheduledDate) {
+        if (isHojeTercaOuQuarta) {
+          scheduledDate = hoje.toLocaleDateString('pt-BR');
+        } else {
+          const terca = getNextWeekdayDate(2);
+          scheduledDate = terca.toLocaleDateString('pt-BR');
+        }
+      }
+      if (!scheduledTime) {
+        // Se for hoje, pega o próximo horário disponível
+        if (isHojeTercaOuQuarta) {
+          const horaAtual = hoje.getHours();
+          if (horaAtual < 10) scheduledTime = horarios[0];
+          else if (horaAtual < 12) scheduledTime = horarios[1];
+          else if (horaAtual < 14) scheduledTime = horarios[2];
+          else scheduledTime = horarios[0]; // Se já passou de todos, agenda para o próximo horário do próximo dia
+        } else {
+          scheduledTime = horarios[0];
+        }
+      }
       // 1. Primeiro criar o pedido no Firestore
       const orderId = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
       const orderRef = collection(db, 'orders');
@@ -608,6 +675,8 @@ export default function CheckoutContent() {
           status: 'pending'
         },
         notes: values.notes || '',
+        scheduledDate,
+        scheduledTime,
         createdAt: new Date().toISOString(),
         updatedAt: serverTimestamp(),
         statusHistory: {
@@ -773,6 +842,16 @@ export default function CheckoutContent() {
   // Checkout normal
   const subtotal = cart.reduce((total, item) => total + (item.price || 0) * (item.quantity || 1), 0)
   const total = subtotal + (deliveryMethod === "delivery" ? deliveryFee : 0)
+
+  // Horários disponíveis
+  const horarios = [
+    "10h - 12h",
+    "12h - 14h",
+    "14h - 17h"
+  ];
+
+  // Aviso se não for terça ou quarta
+  const showAgendamentoAviso = !isHojeTercaOuQuarta;
 
   return (
     <div className="container mx-auto px-4 py-24 max-w-6xl mt-20 relative z-20">
@@ -1177,6 +1256,55 @@ export default function CheckoutContent() {
                               value={field.value || ""}
                             />
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  {/* AVISO DE AGENDAMENTO */}
+                  {showAgendamentoAviso && (
+                    <div className="bg-yellow-100 border-l-4 border-yellow-400 text-yellow-700 p-4 mb-6 rounded">
+                      <strong>Agendamento obrigatório:</strong> Só entregamos às <b>terças</b> e <b>quartas-feiras</b>.<br/>
+                      Seu pedido será agendado para o próximo dia disponível.
+                    </div>
+                  )}
+                  {/* CAMPOS DE AGENDAMENTO */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    <FormField
+                      control={form.control}
+                      name="scheduledDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Dia da entrega</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Escolha o dia" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={tercaStr}>Terça-feira ({tercaStr})</SelectItem>
+                              <SelectItem value={quartaStr}>Quarta-feira ({quartaStr})</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="scheduledTime"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Horário da entrega</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Escolha o horário" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {horarios.map(h => (
+                                <SelectItem key={h} value={h}>{h}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
