@@ -52,7 +52,9 @@ export default function AdminDishList() {
         price: doc.data().price,
         image: doc.data().image,
         isAvailable: doc.data().isAvailable,
-        category: doc.data().category,
+        categories: Array.isArray(doc.data().categories)
+          ? doc.data().categories
+          : [],
         ingredients: doc.data().ingredients || [],
         preparationTime: doc.data().preparationTime || 0,
         nutritionalInfo: doc.data().nutritionalInfo || {},
@@ -64,9 +66,7 @@ export default function AdminDishList() {
   }, [])
 
   const filteredDishes = dishes.filter((dish) => {
-    const matchesSearch = dish.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = showInactive ? true : dish.isAvailable
-    return matchesSearch && matchesStatus
+    return dish.name.toLowerCase().includes(searchTerm.toLowerCase())
   })
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
@@ -113,10 +113,8 @@ export default function AdminDishList() {
     setEditingDish(dish)
     setEditForm({
       ...dish,
-      categories: Array.isArray((dish as any).categories)
-        ? (dish as any).categories
-        : dish.category
-        ? [dish.category]
+      categories: Array.isArray(dish.categories)
+        ? dish.categories
         : [],
     })
   }
@@ -398,18 +396,22 @@ export default function AdminDishList() {
                     <input
                       type="checkbox"
                       value={category.id}
-                      checked={editForm?.categories?.includes(category.id) || false}
+                      checked={Array.isArray(editForm?.categories) && editForm.categories.some(c => c.trim().toLowerCase() === category.id.trim().toLowerCase())}
                       onChange={e => {
                         if (!editForm) return;
                         if (e.target.checked) {
                           setEditForm(f => ({
                             ...f!,
-                            categories: [...(f?.categories || []), category.id]
+                            categories: Array.isArray(f?.categories)
+                              ? [...f.categories.filter(c => c.trim().toLowerCase() !== category.id.trim().toLowerCase()), category.id]
+                              : [category.id]
                           }))
                         } else {
                           setEditForm(f => ({
                             ...f!,
-                            categories: (f?.categories || []).filter(c => c !== category.id)
+                            categories: Array.isArray(f?.categories)
+                              ? f.categories.filter(c => c.trim().toLowerCase() !== category.id.trim().toLowerCase())
+                              : []
                           }))
                         }
                       }}
