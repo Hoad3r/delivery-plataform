@@ -78,6 +78,7 @@ export default function Home() {
             className="object-cover w-full h-full"
             priority
           />
+          <div className="absolute inset-0 bg-white/80" />
         </div>
         <div className="container mx-auto px-3 sm:px-4 max-w-[1200px] relative z-10 h-full">
           <div className="flex items-center justify-end min-h-[400px] h-full">
@@ -110,7 +111,7 @@ export default function Home() {
             <h2 className="text-3xl sm:text-4xl font-light tracking-tight text-[#2F5F53] mb-4">Especialidades da casa</h2>
             <div className="w-24 h-[2px] bg-[#DB775F] mx-auto"></div>
             <p className="text-neutral-600 mt-6 max-w-2xl mx-auto">
-              Descubra nossos pratos mais requintados, preparados com ingredientes selecionados e técnicas refinadas
+              Conheça nossos pratos especiais, cuidadosamente elaborados com ingredientes naturais e combinações nutritivas, pensados para levar mais leveza e sabor ao seu dia a dia.
             </p>
           </m.div>
 
@@ -138,12 +139,10 @@ export default function Home() {
             transition={{ duration: 0.8 }}
             viewport={{ once: true }}
           >
-            <h2 className="text-2xl sm:text-3xl font-light tracking-tight mb-4 sm:mb-6 text-[#2F5F53]">Delivery premium</h2>
+            <h2 className="text-2xl sm:text-3xl font-light tracking-tight mb-4 sm:mb-6 text-[#2F5F53]">Delivery</h2>
             <div className="w-16 sm:w-20 h-[1px] bg-[#DB775F] mx-auto mb-6 sm:mb-8"></div>
             <p className="text-sm sm:text-base text-neutral-500 max-w-2xl mx-auto mb-6 sm:mb-8">
-              Proporcione a si mesmo uma experiência gastronômica memorável sem sair de casa. Nosso serviço de delivery
-              foi pensado para preservar a qualidade e apresentação dos pratos, garantindo que você desfrute da mesma
-              excelência que oferecemos.
+            Preparamos nossas marmitas com cuidado e entregamos todas às terças e quartas, mantendo o frescor, a apresentação e o capricho de sempre. É praticidade para a sua rotina, com refeições equilibradas e feitas com ingredientes que respeitam o seu bem-estar.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 max-w-3xl mx-auto mt-8 sm:mt-12">
               <m.div 
@@ -184,7 +183,7 @@ export default function Home() {
                 </div>
                 <h3 className="text-base sm:text-lg font-medium mb-1 sm:mb-2 text-[#95B2A0]">Desfrute</h3>
                 <p className="text-xs sm:text-sm text-neutral-500 text-center">
-                  Receba em casa e aproveite uma experiência gastronômica única
+                  Receba nossas marmitas com sabor e qualidade direto na sua casa.
                 </p>
               </m.div>
             </div>
