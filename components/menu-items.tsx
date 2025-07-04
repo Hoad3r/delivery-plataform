@@ -26,7 +26,7 @@ export default function MenuItems() {
   const searchTerm = searchParams.get("busca")?.toLowerCase() || ""
   const { addItem, cart, removeItem } = useCart()
   const containerRef = useRef(null)
-  const { dishes = [], selectedDate, selectedPeriod, getDishAvailability } = useMenu()
+  const { dishes = [], getDishAvailability } = useMenu()
   const [displayedItems, setDisplayedItems] = useState(dishes || [])
   const [isMobile, setIsMobile] = useState(false)
 
@@ -131,6 +131,20 @@ export default function MenuItems() {
     const isAvailable = availability && availability.available > 0 && dish.isAvailable
     const isAdded = isItemInCart(dish.id)
 
+    // Otimização para mobile: definir tamanhos, lazy loading e blur
+    const imageProps = isMobileCard
+      ? {
+          width: 280,
+          height: 288,
+          loading: 'lazy' as const,
+          placeholder: 'blur' as const,
+          blurDataURL: '/placeholder-logo.png',
+        }
+      : {
+          fill: true,
+          placeholder: 'empty' as const,
+        }
+
     return (
       <motion.div
         key={dish.id}
@@ -146,8 +160,7 @@ export default function MenuItems() {
             <Image
               src={dish.image && dish.image !== "" ? dish.image : "/placeholder-logo.png"}
               alt={dish.name}
-              fill
-              placeholder={dish.image && dish.image.startsWith('/') ? 'blur' : 'empty'}
+              {...imageProps}
               className="object-cover transition-transform duration-500 group-hover:scale-110"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
