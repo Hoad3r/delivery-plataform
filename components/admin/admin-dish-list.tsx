@@ -87,6 +87,19 @@ export default function AdminDishList() {
       const snapshot = await getDocs(collection(db, "dishes"));
       const dishDoc = snapshot.docs.find(docSnap => docSnap.data().id === id);
       if (dishDoc) {
+        const dishData = dishDoc.data();
+        const availableQuantity = dishData.availableQuantity || 0;
+        
+        // Se está tentando ativar um prato com estoque zero, impedir
+        if (!currentStatus && availableQuantity === 0) {
+          toast({
+            title: "Não é possível ativar o prato",
+            description: "O prato não pode ser ativado porque o estoque está zerado. Adicione estoque primeiro.",
+            variant: "destructive"
+          });
+          return;
+        }
+        
         await updateDoc(doc(db, "dishes", dishDoc.id), {
           isAvailable: !currentStatus
         });
@@ -298,14 +311,19 @@ export default function AdminDishList() {
                       <DropdownMenuItem onClick={() => openEditModal(dish)}>
                         <Edit className="h-4 w-4 mr-2" /> Editar
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleToggleActive(dish.id, dish.isAvailable)}>
+                      <DropdownMenuItem 
+                        onClick={() => handleToggleActive(dish.id, dish.isAvailable)}
+                        className={!dish.isAvailable && dish.availableQuantity === 0 ? "opacity-50 cursor-not-allowed" : ""}
+                        disabled={!dish.isAvailable && dish.availableQuantity === 0}
+                      >
                         {dish.isAvailable ? (
                           <>
                             <EyeOff className="h-4 w-4 mr-2" /> Desativar
                           </>
                         ) : (
                           <>
-                            <Eye className="h-4 w-4 mr-2" /> Ativar
+                            <Eye className="h-4 w-4 mr-2" /> 
+                            {dish.availableQuantity === 0 ? "Ativar (sem estoque)" : "Ativar"}
                           </>
                         )}
                       </DropdownMenuItem>
@@ -360,14 +378,21 @@ export default function AdminDishList() {
                 <Button variant="outline" size="sm" onClick={() => openEditModal(dish)}>
                   <Edit className="h-4 w-4 mr-2" /> Editar
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => handleToggleActive(dish.id, dish.isAvailable)}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleToggleActive(dish.id, dish.isAvailable)}
+                  disabled={!dish.isAvailable && dish.availableQuantity === 0}
+                  className={!dish.isAvailable && dish.availableQuantity === 0 ? "opacity-50 cursor-not-allowed" : ""}
+                >
                   {dish.isAvailable ? (
                     <>
                       <EyeOff className="h-4 w-4 mr-2" /> Desativar
                     </>
                   ) : (
                     <>
-                      <Eye className="h-4 w-4 mr-2" /> Ativar
+                      <Eye className="h-4 w-4 mr-2" /> 
+                      {dish.availableQuantity === 0 ? "Ativar (sem estoque)" : "Ativar"}
                     </>
                   )}
                 </Button>
