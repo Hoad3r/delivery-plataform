@@ -46,12 +46,11 @@ export default function Home() {
             className="text-center space-y-6 py-20"
           >
             <h1 className="font-light tracking-tight text-[#2F5F53] max-w-[1200px] mx-auto leading-tight text-[clamp(2.5rem,7vw,4rem)]">
-              Culinária refinada, <br />
+            Comida saudável, <br />
               <span className="text-[#DB775F]">na sua casa</span>
             </h1>
             <p className="text-[clamp(1rem,2.5vw,1.5rem)] text-neutral-600 max-w-2xl mx-auto">
-              Uma jornada gastronômica que combina sabores autênticos com apresentação impecável, entregue diretamente
-              para você
+              Receitas equilibradas, saborosas e feitas com cuidado, preparadas com carinho e entregues prontas para a sua rotina.
             </p>
             <div className="pt-8">
               <Link href="/cardapio">
