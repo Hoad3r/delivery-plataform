@@ -34,6 +34,7 @@ export default function AdminAddDish() {
     categories: [] as string[],
     ingredients: [] as string[],
     preparationTime: "",
+    availableQuantity: "",
     nutritionalInfo: {
       calories: "",
       protein: "",
@@ -137,7 +138,8 @@ export default function AdminAddDish() {
       !formData.price ||
       !formData.categories.length ||
       !formData.ingredients.length ||
-      !formData.preparationTime
+      !formData.preparationTime ||
+      !formData.availableQuantity
     ) {
       toast({
         title: "Erro ao adicionar prato",
@@ -174,6 +176,7 @@ export default function AdminAddDish() {
         categories: formData.categories,
         ingredients: formData.ingredients,
         preparationTime: parseInt(formData.preparationTime),
+        availableQuantity: parseInt(formData.availableQuantity),
         nutritionalInfo: {
           calories: parseInt(formData.nutritionalInfo.calories),
           protein: parseInt(formData.nutritionalInfo.protein),
@@ -203,6 +206,7 @@ export default function AdminAddDish() {
         categories: [],
         ingredients: [],
         preparationTime: "",
+        availableQuantity: "",
         nutritionalInfo: {
           calories: "",
           protein: "",
@@ -348,6 +352,25 @@ export default function AdminAddDish() {
               className="mt-1"
               required
             />
+          </div>
+
+          {/* Quantidade Disponível */}
+          <div>
+            <Label htmlFor="availableQuantity">Quantidade de Marmitas Disponíveis *</Label>
+            <Input
+              id="availableQuantity"
+              name="availableQuantity"
+              type="number"
+              min="0"
+              value={formData.availableQuantity}
+              onChange={handleChange}
+              className="mt-1"
+              placeholder="Ex: 50"
+              required
+            />
+            <p className="text-xs text-neutral-500 mt-1">
+              Quando a quantidade chegar a 0, o prato ficará automaticamente indisponível no menu.
+            </p>
           </div>
 
           {/* Informações Nutricionais */}

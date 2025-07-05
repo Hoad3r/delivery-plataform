@@ -13,6 +13,7 @@ export interface Dish {
   price: number
   image?: string
   isAvailable: boolean
+  availableQuantity: number
   categories: string[]
   ingredients?: string[]
   preparationTime?: number

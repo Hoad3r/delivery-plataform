@@ -52,6 +52,7 @@ export default function AdminDishList() {
         price: doc.data().price,
         image: doc.data().image,
         isAvailable: doc.data().isAvailable,
+        availableQuantity: doc.data().availableQuantity || 0,
         categories: Array.isArray(doc.data().categories)
           ? doc.data().categories
           : [],
@@ -66,8 +67,19 @@ export default function AdminDishList() {
   }, [])
 
   const filteredDishes = dishes.filter((dish) => {
-    return dish.name.toLowerCase().includes(searchTerm.toLowerCase())
+    // Filtro por nome
+    const matchesSearch = dish.name.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    // Filtro por status (ativo/inativo)
+    let matchesStatus = true
+    if (!showInactive) {
+      matchesStatus = dish.isAvailable === true
+    }
+    
+    return matchesSearch && matchesStatus
   })
+
+
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
@@ -88,6 +100,8 @@ export default function AdminDishList() {
       console.error("Erro ao atualizar disponibilidade do prato:", error);
     }
   }
+
+
 
   const handleDeleteDish = async () => {
     try {
@@ -113,6 +127,7 @@ export default function AdminDishList() {
     setEditingDish(dish)
     setEditForm({
       ...dish,
+      availableQuantity: dish.availableQuantity || 0, // Garantir que sempre tenha um valor
       categories: Array.isArray(dish.categories)
         ? dish.categories
         : [],
@@ -122,12 +137,27 @@ export default function AdminDishList() {
   // Função para salvar edição
   const handleEditSave = async () => {
     if (!editForm || !editForm.id) return
+    
+    // Validação dos campos obrigatórios
+    if (!editForm.name || !editForm.description || !editForm.price || !editForm.availableQuantity) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Por favor, preencha todos os campos obrigatórios.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setIsSavingEdit(true)
     try {
       // Buscar o documento pelo campo id
       const snapshot = await getDocs(collection(db, "dishes"));
       const dishDoc = snapshot.docs.find(docSnap => docSnap.data().id === editForm.id);
       if (dishDoc) {
+        // Verifica se a quantidade chegou a 0 e atualiza o status automaticamente
+        const newQuantity = editForm.availableQuantity || 0;
+        const shouldBeAvailable = newQuantity > 0;
+        
         await updateDoc(doc(db, "dishes", dishDoc.id), {
           name: editForm.name,
           description: editForm.description,
@@ -135,12 +165,17 @@ export default function AdminDishList() {
           categories: editForm.categories || [],
           ingredients: editForm.ingredients,
           preparationTime: editForm.preparationTime,
+          availableQuantity: newQuantity,
+          isAvailable: shouldBeAvailable, // Atualiza automaticamente baseado na quantidade
           nutritionalInfo: editForm.nutritionalInfo,
           image: editForm.image || "",
         });
+        
         toast({
           title: "Prato editado",
-          description: "As alterações foram salvas com sucesso.",
+          description: newQuantity === 0 
+            ? "Prato editado e marcado como indisponível (estoque esgotado)." 
+            : "As alterações foram salvas com sucesso.",
           variant: "success"
         })
       }
@@ -162,30 +197,58 @@ export default function AdminDishList() {
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-md rounded-none"
         />
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="show-inactive" 
-            checked={showInactive} 
-            onCheckedChange={(checked) => setShowInactive(checked === true)} 
-          />
-          <label htmlFor="show-inactive" className="text-xs md:text-sm text-neutral-600">
-            Mostrar pratos inativos
-          </label>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <Button
+              variant={showInactive ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowInactive(!showInactive)}
+              className="h-8 px-3"
+            >
+              {showInactive ? "✓" : "○"} Mostrar inativos
+            </Button>
+          </div>
+          
+          {/* Indicadores de contagem */}
+          <div className="flex items-center space-x-3 text-xs text-neutral-500">
+            <span className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              {dishes.filter(d => d.isAvailable === true).length} ativos
+            </span>
+            <span className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              {dishes.filter(d => d.isAvailable === false).length} inativos
+            </span>
+            {showInactive && (
+              <span className="text-blue-600 font-medium">
+                Mostrando {filteredDishes.length} pratos
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="border border-neutral-200">
         <div className="grid grid-cols-12 bg-neutral-50 p-4 border-b border-neutral-200 hidden md:grid">
           <div className="col-span-1 font-light text-neutral-500">Imagem</div>
-          <div className="col-span-3 font-light text-neutral-500">Nome</div>
-          <div className="col-span-3 font-light text-neutral-500">Descrição</div>
+          <div className="col-span-2 font-light text-neutral-500">Nome</div>
+          <div className="col-span-2 font-light text-neutral-500">Descrição</div>
           <div className="col-span-1 font-light text-neutral-500">Preço</div>
+          <div className="col-span-1 font-light text-neutral-500">Estoque</div>
           <div className="col-span-2 font-light text-neutral-500">Status</div>
-          <div className="col-span-2 font-light text-neutral-500 text-right">Ações</div>
+          <div className="col-span-3 font-light text-neutral-500 text-right">Ações</div>
         </div>
 
         {filteredDishes.length === 0 ? (
-          <div className="p-8 text-center text-neutral-500">Nenhum prato encontrado.</div>
+          <div className="p-8 text-center text-neutral-500">
+            {showInactive && dishes.filter(d => d.isAvailable === false).length === 0 ? (
+              "Não há pratos inativos para mostrar."
+            ) : searchTerm ? (
+              "Nenhum prato encontrado com esse nome."
+            ) : (
+              "Nenhum prato encontrado."
+            )}
+          </div>
         ) : (
           filteredDishes.map((dish) => (
             <div
@@ -203,6 +266,19 @@ export default function AdminDishList() {
                       <h3 className="font-medium text-sm">{dish.name}</h3>
                       <p className="text-xs text-neutral-500 line-clamp-2">{dish.description}</p>
                       <p className="text-xs mt-1">{formatCurrency(dish.price)}</p>
+                      <p className="text-xs text-neutral-600">
+                        Estoque: <span className={`font-medium ${
+                          dish.availableQuantity === 0 
+                            ? 'text-red-600' 
+                            : dish.availableQuantity <= 5 
+                              ? 'text-orange-600' 
+                              : 'text-green-600'
+                        }`}>
+                          {dish.availableQuantity}
+                          {dish.availableQuantity <= 5 && dish.availableQuantity > 0 && ' ⚠️'}
+                          {dish.availableQuantity === 0 && ' ❌'}
+                        </span>
+                      </p>
                       <div className="mt-2">
                         <span
                           className={`px-2 py-1 text-xs rounded-full ${dish.isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
@@ -253,9 +329,26 @@ export default function AdminDishList() {
                   <Image src={dish.image && dish.image !== "" ? dish.image : "/placeholder.svg"} alt={dish.name} fill className="object-cover" />
                 </div>
               </div>
-              <div className="col-span-3 hidden md:block">{dish.name}</div>
-              <div className="col-span-3 hidden md:block text-sm text-neutral-600 line-clamp-2">{dish.description}</div>
+              <div className="col-span-2 hidden md:block">{dish.name}</div>
+              <div className="col-span-2 hidden md:block text-sm text-neutral-600 line-clamp-2">{dish.description}</div>
               <div className="col-span-1 hidden md:block">{formatCurrency(dish.price)}</div>
+              <div className="col-span-1 hidden md:block text-sm">
+                <span className={`font-medium ${
+                  dish.availableQuantity === 0 
+                    ? 'text-red-600' 
+                    : dish.availableQuantity <= 5 
+                      ? 'text-orange-600' 
+                      : 'text-green-600'
+                }`}>
+                  {dish.availableQuantity}
+                  {dish.availableQuantity <= 5 && dish.availableQuantity > 0 && (
+                    <span className="ml-1 text-xs">⚠️</span>
+                  )}
+                  {dish.availableQuantity === 0 && (
+                    <span className="ml-1 text-xs">❌</span>
+                  )}
+                </span>
+              </div>
               <div className="col-span-2 hidden md:flex items-center">
                 <span
                   className={`px-2 py-1 text-xs rounded-full ${dish.isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
@@ -263,7 +356,7 @@ export default function AdminDishList() {
                   {dish.isAvailable ? "Ativo" : "Inativo"}
                 </span>
               </div>
-              <div className="col-span-2 hidden md:flex justify-end space-x-2">
+              <div className="col-span-3 hidden md:flex justify-end space-x-2">
                 <Button variant="outline" size="sm" onClick={() => openEditModal(dish)}>
                   <Edit className="h-4 w-4 mr-2" /> Editar
                 </Button>
@@ -434,6 +527,36 @@ export default function AdminDishList() {
                 value={editForm?.preparationTime ?? ""}
                 onChange={e => setEditForm(f => ({ ...f!, preparationTime: Number(e.target.value) }))}
               />
+              <label className="block text-sm">Quantidade Disponível</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  className="flex-1 border rounded px-2 py-1"
+                  value={editForm?.availableQuantity ?? ""}
+                  onChange={e => {
+                    const value = parseInt(e.target.value);
+                    if (!isNaN(value) && value >= 0) {
+                      setEditForm(f => ({ ...f!, availableQuantity: value }));
+                    }
+                  }}
+                  placeholder="Ex: 50"
+                />
+                <span className={`text-xs px-2 py-1 rounded ${
+                  (editForm?.availableQuantity || 0) === 0 
+                    ? 'bg-red-100 text-red-800' 
+                    : (editForm?.availableQuantity || 0) <= 5 
+                      ? 'bg-orange-100 text-orange-800' 
+                      : 'bg-green-100 text-green-800'
+                }`}>
+                  {(editForm?.availableQuantity || 0) === 0 ? 'Esgotado' : 
+                   (editForm?.availableQuantity || 0) <= 5 ? 'Baixo' : 'Normal'}
+                </span>
+              </div>
+              <p className="text-xs text-neutral-500">
+                Quando a quantidade chegar a 0, o prato ficará automaticamente indisponível.
+              </p>
               <label className="block text-sm">Informações Nutricionais</label>
               <div className="grid grid-cols-2 gap-2">
                 <div>

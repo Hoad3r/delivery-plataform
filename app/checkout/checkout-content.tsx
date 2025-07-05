@@ -33,7 +33,7 @@ import { useAuth } from "@/context/auth-context"
 import { formatCurrency, calcularDistanciaKm, calcularTaxaEntrega, buscarCoordenadasPorEndereco, RESTAURANTE_COORDS } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, serverTimestamp, getDocs, query, doc, updateDoc, getDoc } from "firebase/firestore"
+import { collection, addDoc, serverTimestamp, getDocs, query, doc, updateDoc, getDoc, where } from "firebase/firestore"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Define validation schema
@@ -149,6 +149,48 @@ export default function CheckoutContent() {
     }
   }, [isAuthenticated, user, mounted, form])
 
+  // Função para diminuir o estoque dos pratos
+  const decreaseStockForOrder = async (orderItems: any[]) => {
+    try {
+      console.log('📦 Diminuindo estoque para os itens do pedido...');
+      
+      for (const item of orderItems) {
+        // Buscar o prato no Firestore pelo ID
+        const dishesRef = collection(db, "dishes");
+        const q = query(dishesRef, where("id", "==", item.id));
+        const dishSnapshot = await getDocs(q);
+        
+        if (!dishSnapshot.empty) {
+          const dishDoc = dishSnapshot.docs[0];
+          const dishData = dishDoc.data();
+          const currentStock = dishData.availableQuantity || 0;
+          const newStock = Math.max(0, currentStock - item.quantity);
+          
+          // Atualizar o estoque
+          await updateDoc(doc(db, "dishes", dishDoc.id), {
+            availableQuantity: newStock,
+            // Se o estoque chegou a 0, marcar como indisponível
+            isAvailable: newStock > 0
+          });
+          
+          console.log(`✅ Estoque atualizado para ${item.name}: ${currentStock} → ${newStock}`);
+          
+          // Se o estoque chegou a 0, mostrar alerta
+          if (newStock === 0) {
+            console.log(`⚠️ Estoque esgotado para ${item.name}`);
+          }
+        } else {
+          console.warn(`⚠️ Prato não encontrado: ${item.name} (ID: ${item.id})`);
+        }
+      }
+      
+      console.log('✅ Estoque atualizado com sucesso para todos os itens!');
+    } catch (error) {
+      console.error('❌ Erro ao atualizar estoque:', error);
+      throw error;
+    }
+  };
+
   // Poll Mercado Pago for payment status when paymentId is set
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -186,10 +228,25 @@ export default function CheckoutContent() {
                   };
                   await updateDoc(orderRef, updateData);
                   console.log('✅ Pedido atualizado com sucesso!');
+                  
                   // Buscar dados completos do pedido para enviar emails
                   const orderDoc = await getDoc(orderRef);
                   if (orderDoc.exists()) {
                     const orderData = orderDoc.data();
+                    
+                    // Diminuir o estoque dos pratos
+                    try {
+                      await decreaseStockForOrder(orderData.items);
+                    } catch (stockError) {
+                      console.error('❌ Erro ao atualizar estoque:', stockError);
+                      // Não interromper o fluxo se houver erro no estoque
+                      toast({
+                        title: "Aviso",
+                        description: "Pedido confirmado, mas houve um problema ao atualizar o estoque. Entre em contato com o suporte.",
+                        variant: "destructive"
+                      });
+                    }
+                    
                     // Enviar emails de confirmação
                     try {
                       // 1. Email para o cliente
@@ -568,6 +625,54 @@ export default function CheckoutContent() {
           setIsSubmitting(false)
           return
         }
+      }
+      
+      // Verificar disponibilidade de estoque antes de processar o pedido
+      try {
+        console.log('🔍 Verificando disponibilidade de estoque...');
+        const dishesRef = collection(db, "dishes");
+        
+        for (const cartItem of cart) {
+          const q = query(dishesRef, where("id", "==", cartItem.id));
+          const dishSnapshot = await getDocs(q);
+          
+          if (!dishSnapshot.empty) {
+            const dishData = dishSnapshot.docs[0].data();
+            const availableStock = dishData.availableQuantity || 0;
+            const requestedQuantity = cartItem.quantity || 1;
+            
+            if (availableStock < requestedQuantity) {
+              toast({
+                title: "Estoque insuficiente",
+                description: `Desculpe, não há estoque suficiente para ${cartItem.name}. Disponível: ${availableStock}, Solicitado: ${requestedQuantity}`,
+                variant: "destructive",
+              });
+              setIsSubmitting(false);
+              setIsProcessingOrder(false);
+              return;
+            }
+          } else {
+            toast({
+              title: "Produto não encontrado",
+              description: `O produto ${cartItem.name} não foi encontrado no sistema.`,
+              variant: "destructive",
+            });
+            setIsSubmitting(false);
+            setIsProcessingOrder(false);
+            return;
+          }
+        }
+        console.log('✅ Estoque verificado com sucesso!');
+      } catch (stockError) {
+        console.error('❌ Erro ao verificar estoque:', stockError);
+        toast({
+          title: "Erro ao verificar estoque",
+          description: "Não foi possível verificar a disponibilidade dos produtos. Tente novamente.",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        setIsProcessingOrder(false);
+        return;
       }
       // Validar campos de endereço para entrega
       if (values.deliveryMethod === "delivery") {

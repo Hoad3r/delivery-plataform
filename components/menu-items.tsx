@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useMenu } from "@/contexts/menu-context"
 import { formatCurrency } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/hooks/use-toast"
 import React from "react"
 
 const categories = [
@@ -25,6 +26,7 @@ export default function MenuItems() {
   const categoryFilter = searchParams.get("categoria")
   const searchTerm = searchParams.get("busca")?.toLowerCase() || ""
   const { addItem, cart, removeItem } = useCart()
+  const { toast } = useToast()
   const containerRef = useRef(null)
   const { dishes = [], getDishAvailability } = useMenu()
   const [displayedItems, setDisplayedItems] = useState(dishes || [])
@@ -46,7 +48,7 @@ export default function MenuItems() {
     let filtered = dishes
 
     // LOG: pratos disponíveis antes do filtro
-    console.log('Dishes disponíveis:', dishes)
+    console.log('Dishes disponíveis:', dishes.length)
     console.log('Filtro de categoria:', categoryFilter)
     console.log('Filtro de busca:', searchTerm)
 
@@ -84,13 +86,21 @@ export default function MenuItems() {
     return found
   }
 
-  const handleAddToCart = (item: any) => {
-    addItem({
+  const handleAddToCart = async (item: any) => {
+    const success = await addItem({
       id: item.id,
       name: item.name,
       price: item.price,
       quantity: 1,
     })
+    
+    if (!success) {
+      toast({
+        title: "Erro ao adicionar ao carrinho",
+        description: "Este item não está disponível ou não há estoque suficiente.",
+        variant: "destructive",
+      });
+    }
   }
 
   const handleRemoveFromCart = (itemId: string) => {
@@ -128,7 +138,8 @@ export default function MenuItems() {
 
   const renderDishCard = (dish: any, isMobileCard = false) => {
     const availability = getDishAvailability(dish.id)
-    const isAvailable = availability && availability.available > 0 && dish.isAvailable
+    // Verificação de disponibilidade
+    const isAvailable = dish.isAvailable && (dish.availableQuantity || 0) > 0
     const isAdded = isItemInCart(dish.id)
 
     // Otimização para mobile: definir tamanhos, lazy loading e blur
@@ -238,7 +249,7 @@ export default function MenuItems() {
         {/* Seções por Categoria */}
         {!searchTerm && Array.isArray(categories) && categories.map((category) => {
           const categoryItems = Array.isArray(dishes)
-            ? dishes.filter((dish: import("@/types/menu").Dish) =>
+            ? dishes.filter((dish: any) =>
                 Array.isArray(dish.categories) &&
                 dish.categories.some((cat: string) => cat.trim().toLowerCase() === category.id.trim().toLowerCase())
               )
