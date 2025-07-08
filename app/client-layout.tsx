@@ -20,19 +20,7 @@ function LayoutWrapper({ children }: { children: React.ReactNode }) {
     <>
       {!isCheckout && !isAdminPage && <Navbar />}
       {children}
-      {!isCheckout && !isAdminPage && (
-        isSimpleFooterPage ? (
-          <footer className="bg-neutral-900 text-white py-6">
-            <div className="container mx-auto px-3 sm:px-4 text-center">
-              <p className="text-neutral-500 font-light text-xs sm:text-sm">
-                &copy; {new Date().getFullYear()} Restaurante. Todos os direitos reservados.
-              </p>
-            </div>
-          </footer>
-        ) : (
-          <Footer />
-        )
-      )}
+      {!isCheckout && !isAdminPage && <Footer />}
     </>
   )
 }

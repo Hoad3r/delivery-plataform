@@ -1,5 +1,5 @@
 import Image from "next/image"
-import Footer from "@/components/footer"
+// import Footer from "@/components/footer"
 
 export default function SobrePage() {
   return (
@@ -53,7 +53,7 @@ export default function SobrePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-16 items-center mb-16 sm:mb-24">
         <div className="relative aspect-[3/4] w-full max-w-xs mx-auto sm:max-w-none sm:aspect-[3/4] sm:h-[400px]">
           <Image
-            src="/images/adriana.jpg"
+            src="/placeholder.svg?height=800&width=600"
             alt="Nossa equipe"
             fill
             className="object-contain rounded shadow"
@@ -118,7 +118,6 @@ export default function SobrePage() {
 
 
       </div>
-      <Footer />
     </div>
   )
 } 

@@ -82,7 +82,7 @@ export default function CheckoutContent() {
   const [currentOrderDocId, setCurrentOrderDocId] = useState<string | null>(null)
   const [addressChanged, setAddressChanged] = useState(0)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [deliveryFee, setDeliveryFee] = useState(8.0)
+  const [deliveryFee, setDeliveryFee] = useState(6.0)
   const [deliveryError, setDeliveryError] = useState<string | null>(null)
   const [calculandoEntrega, setCalculandoEntrega] = useState(false)
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null)
@@ -580,7 +580,7 @@ export default function CheckoutContent() {
       const cidade = "João Pessoa"
       const uf = "PB"
       if (!street || !number) {
-        setDeliveryFee(8.0)
+        setDeliveryFee(6.0)
         setDeliveryError(null)
         return
       }
@@ -591,7 +591,7 @@ export default function CheckoutContent() {
       lastAddressRef.current = enderecoCompleto
       const coords = await buscarCoordenadasPorEndereco(enderecoCompleto)
       if (!coords) {
-        setDeliveryFee(8.0)
+        setDeliveryFee(6.0)
         setDeliveryError("Não foi possível localizar o endereço. Verifique se está correto.")
       } else {
         const distancia = calcularDistanciaKm(RESTAURANTE_COORDS.lat, RESTAURANTE_COORDS.lon, coords.lat, coords.lon)

@@ -4,7 +4,7 @@ import { useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { MapPin, Clock, Mail, Phone } from "lucide-react"
-import Footer from "@/components/footer"
+// import Footer from "@/components/footer"
 
 export default function ContatoPage() {
   // Número de WhatsApp (formato internacional sem símbolos)
@@ -115,7 +115,7 @@ export default function ContatoPage() {
 
         {/* Bloco de endereço e mapa removidos conforme solicitado */}
       </div>
-      <Footer />
+      {/* <Footer /> */}
     </>
   )
 } 
