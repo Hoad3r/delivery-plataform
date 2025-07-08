@@ -4,6 +4,7 @@ import { useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { MapPin, Clock, Mail, Phone } from "lucide-react"
+import Footer from "@/components/footer"
 
 export default function ContatoPage() {
   // Número de WhatsApp (formato internacional sem símbolos)
@@ -37,7 +38,7 @@ export default function ContatoPage() {
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-white p-4">
           <h2 className="text-xl sm:text-3xl font-light mb-3 sm:mb-4 text-center">Atendimento rápido via WhatsApp</h2>
           <p className="text-sm sm:text-base text-center max-w-md mb-6 sm:mb-8 text-white/80">
-            Tire suas dúvidas, faça seu pedido ou reserve uma mesa diretamente pelo WhatsApp
+            Tire suas dúvidas diretamente pelo WhatsApp
           </p>
 
           <Link href={whatsappUrl} target="_blank" rel="noopener noreferrer">
@@ -58,24 +59,7 @@ export default function ContatoPage() {
       </div>
 
       {/* Cards de informações */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <Card className="border-neutral-200 overflow-hidden">
-          <CardContent className="p-0">
-            <div className="bg-neutral-50 p-4 flex flex-col items-center text-center">
-              <MapPin className="h-6 w-6 text-neutral-700 mb-3" />
-              <h3 className="font-medium text-sm sm:text-base mb-2">Endereço</h3>
-              <a
-                href="https://www.google.com/maps/search/?api=1&query=Av.+Eutiquiano+Barreto,+863"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#2F5F53] underline text-xs sm:text-sm hover:text-[#1d3c34] transition-colors"
-              >
-                Av. Eutiquiano Barreto, 863
-              </a>
-            </div>
-          </CardContent>
-        </Card>
-
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 justify-items-center">
         <Card className="border-neutral-200 overflow-hidden">
           <CardContent className="p-0">
             <div className="bg-neutral-50 p-4 flex flex-col items-center text-center">
@@ -128,40 +112,8 @@ export default function ContatoPage() {
         </Card>
       </div>
 
-      {/* Mapa e mensagem final */}
-      <div className="mt-12 sm:mt-16">
-        <div className="relative h-[200px] sm:h-[300px] w-full bg-neutral-100 border border-neutral-200 mb-6 sm:mb-8">
-          <iframe
-            title="Mapa - Av. Eutiquiano Barreto, 863"
-            src="https://www.google.com/maps?q=Av.+Eutiquiano+Barreto,+863&output=embed"
-            width="100%"
-            height="100%"
-            style={{ border: 0 }}
-            allowFullScreen
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-            className="absolute inset-0 w-full h-full rounded"
-          ></iframe>
-        </div>
-
-        <div className="text-center">
-          <p className="text-neutral-500 text-xs sm:text-sm max-w-2xl mx-auto mb-6">
-            Prefere falar conosco pessoalmente? Visite nosso restaurante ou entre em contato pelos canais acima. Para
-            atendimento mais rápido, recomendamos o WhatsApp.
-          </p>
-
-          <Link href={whatsappUrl} target="_blank" rel="noopener noreferrer">
-            <Button
-              className="bg-[#2F5F53] text-white border-2 border-[#2F5F53] hover:bg-white hover:text-[#2F5F53] hover:border-[#2F5F53] transition-all duration-300 text-base px-8 py-6 rounded-full shadow-lg hover:shadow-xl hover:scale-105"
-            >
-              <svg viewBox="0 0 32 32" className="h-4 w-4 mr-2 fill-current" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 2C8.28 2 2 8.28 2 16C2 18.9728 2.90933 21.6822 4.42667 23.8683L2.52 29.48L8.32667 27.6133C10.4333 29.0133 13.1067 29.8333 16 29.8333C23.72 29.8333 30 23.5533 30 15.8333C30 12.0733 28.52 8.59333 25.9 5.97333C23.28 3.35333 19.76 2 16 2ZM22.9867 21.0333C22.6667 21.9533 21.2933 22.7333 20.2333 22.9533C19.48 23.1 18.52 23.2133 15.3667 21.9533C11.3667 20.3933 8.8 16.3133 8.56 16C8.33333 15.6867 7 13.8333 7 11.9133C7 10 7.96 9.09333 8.4 8.64C8.76 8.26667 9.33333 8.1 9.88 8.1C10.04 8.1 10.2 8.1 10.3333 8.11333C10.7333 8.13333 10.9333 8.16 11.2 8.76C11.5333 9.52 12.2933 11.4333 12.4 11.6667C12.5133 11.9 12.6267 12.2 12.4667 12.4867C12.32 12.7867 12.1867 12.9333 11.9533 13.2C11.72 13.4667 11.5 13.6667 11.2667 13.96C11.0533 14.2133 10.8133 14.48 11.08 14.9133C11.3467 15.3333 12.1067 16.56 13.2 17.5333C14.6 18.7733 15.7333 19.16 16.2 19.3733C16.5467 19.5333 16.9667 19.5 17.2267 19.2C17.56 18.8267 17.9733 18.1933 18.3933 17.5733C18.6933 17.12 19.0933 17.0533 19.5133 17.2133C19.9467 17.36 21.8533 18.2933 22.32 18.5267C22.7867 18.76 23.0933 18.8733 23.2067 19.0667C23.3067 19.2733 23.3067 20.1 22.9867 21.0333Z" />
-              </svg>
-              Iniciar conversa
-            </Button>
-          </Link>
-        </div>
-      </div>
+      {/* Bloco de endereço e mapa removidos conforme solicitado */}
     </div>
+    <Footer />
   )
 } 

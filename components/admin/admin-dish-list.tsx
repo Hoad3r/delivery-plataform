@@ -66,20 +66,10 @@ export default function AdminDishList() {
     return () => unsubscribe()
   }, [])
 
-  const filteredDishes = dishes.filter((dish) => {
-    // Filtro por nome
-    const matchesSearch = dish.name.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    // Filtro por status (ativo/inativo)
-    let matchesStatus = true
-    if (!showInactive) {
-      matchesStatus = dish.isAvailable === true
-    }
-    
-    return matchesSearch && matchesStatus
-  })
-
-
+  // Agora mostra todos os pratos, apenas filtrando por nome e ordenando
+  const filteredDishes = dishes
+    .filter((dish) => dish.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt', { sensitivity: 'base' }))
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
@@ -211,17 +201,6 @@ export default function AdminDishList() {
           className="max-w-md rounded-none"
         />
         <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <Button
-              variant={showInactive ? "default" : "outline"}
-              size="sm"
-              onClick={() => setShowInactive(!showInactive)}
-              className="h-8 px-3"
-            >
-              {showInactive ? "✓" : "○"} Mostrar inativos
-            </Button>
-          </div>
-          
           {/* Indicadores de contagem */}
           <div className="flex items-center space-x-3 text-xs text-neutral-500">
             <span className="flex items-center gap-1">
@@ -233,9 +212,7 @@ export default function AdminDishList() {
               {dishes.filter(d => d.isAvailable === false).length} inativos
             </span>
             {showInactive && (
-              <span className="text-blue-600 font-medium">
-                Mostrando {filteredDishes.length} pratos
-              </span>
+              null
             )}
           </div>
         </div>
@@ -255,7 +232,7 @@ export default function AdminDishList() {
         {filteredDishes.length === 0 ? (
           <div className="p-8 text-center text-neutral-500">
             {showInactive && dishes.filter(d => d.isAvailable === false).length === 0 ? (
-              "Não há pratos inativos para mostrar."
+              null
             ) : searchTerm ? (
               "Nenhum prato encontrado com esse nome."
             ) : (

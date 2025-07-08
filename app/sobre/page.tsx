@@ -1,4 +1,5 @@
 import Image from "next/image"
+import Footer from "@/components/footer"
 
 export default function SobrePage() {
   return (
@@ -11,22 +12,19 @@ export default function SobrePage() {
       {/* História e Visão */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-16 items-center mb-16 sm:mb-24">
         <div className="order-2 md:order-1">
-          <h2 className="text-xl sm:text-2xl font-light mb-4 sm:mb-6">Uma ideia que nasceu entre amigos
+          <h2 className="text-xl sm:text-2xl font-light mb-4 sm:mb-6">Uma ideia que nasceu com propósito
           </h2>
           <div className="space-y-4 text-sm sm:text-base text-neutral-700">
             <p>
-              A Nossa Cozinha – Marmita Saudável nasceu em 2025, de uma vontade real de cuidar das pessoas. Em um mundo cada vez mais corrido, percebemos o quanto é difícil manter uma alimentação equilibrada, prática e gostosa.
+            A Nossa Cozinha – Marmita Saudável nasceu em 2025, da vontade de cuidar das pessoas através da alimentação. Em um mundo cada vez mais corrido, percebemos o quanto é difícil manter uma rotina equilibrada e ao mesmo tempo saborosa.
             </p>
             <p>
-            Foi em uma conversa leve, entre um café e boas risadas, que os chefs Filipe e Marcela Rodriguez, junto da amiga e também chef Adriana Miranda, decidiram transformar essa necessidade comum em um projeto com propósito.
+            A chef Adriana Miranda, com sua experiência na gastronomia e sua paixão por nutrir com afeto, decidiu transformar essa necessidade em um projeto com propósito: oferecer refeições saudáveis, práticas e cheias de sabor, que facilitem o dia a dia de quem quer se cuidar.
             </p>
             <p>
-            Mais do que entregar marmitas, queremos facilitar a rotina de quem busca saúde, leveza e sabor no dia a dia — com refeições pensadas por quem entende de cozinha e se importa com cada detalhe.
-
+            Mais do que entregar marmitas, a Nossa Cozinha quer estar presente na rotina com comida de verdade, feita com carinho, ingredientes selecionados e atenção aos detalhes. Um trabalho movido por afeto, técnica e o desejo genuíno de alimentar bem.
             </p>
-            <p>
-            Somos uma cozinha de amigos, movida por afeto, ingredientes de verdade e o desejo de alimentar bem.
-            </p>
+            
           </div>
         </div>
         <div className="order-1 md:order-2 relative h-[250px] sm:h-[400px] w-full">
@@ -44,36 +42,36 @@ export default function SobrePage() {
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-xl sm:text-2xl font-light mb-6 sm:mb-8">Nossa Filosofia</h2>
           <p className="text-sm sm:text-base text-neutral-700 italic">
-            "Acreditamos que a verdadeira gastronomia transcende o simples ato de alimentar. É uma expressão artística
-            que envolve todos os sentidos, criando memórias que perduram muito além da refeição."
+            "Acreditamos que se alimentar bem é um ato de cuidado — consigo mesmo, com o tempo e com a saúde. Por isso, desenvolvemos um modelo que alia sabor, nutrição e praticidade, com marmitas congeladas preparadas com afeto, ingredientes de verdade e equilíbrio."
           </p>
           <div className="w-16 h-[1px] bg-neutral-300 mx-auto mt-6 sm:mt-8"></div>
-          <p className="text-sm text-neutral-500 mt-4">— Nossa Cozinha</p>
+          <p className="text-sm text-neutral-500 mt-4">— Chef Adriana Miranda</p>
         </div>
       </div>
 
       {/* Chef e Equipe */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-16 items-center mb-16 sm:mb-24">
-        <div className="relative h-[250px] sm:h-[400px] w-full">
-          <Image src="/images/nossaequipe.jpg" alt="Nossa equipe" fill className="object-cover" />
+        <div className="relative aspect-[3/4] w-full max-w-xs mx-auto sm:max-w-none sm:aspect-[3/4] sm:h-[400px]">
+          <Image
+            src="/images/adriana.jpg"
+            alt="Nossa equipe"
+            fill
+            className="object-contain rounded shadow"
+            sizes="(max-width: 640px) 100vw, 400px"
+          />
         </div>
         <div>
-          <h2 className="text-xl sm:text-2xl font-light mb-4 sm:mb-6">Nossa Equipe</h2>
+          <h2 className="text-xl sm:text-2xl font-light mb-4 sm:mb-6">Quem está por trás da Nossa Cozinha</h2>
           <div className="space-y-4 text-sm sm:text-base text-neutral-700">
             <p>
-            A Nossa Cozinha – Marmita Saudável é conduzida por três profissionais apaixonados pela boa comida, pelo cuidado com as pessoas e pela vontade de transformar o cotidiano através da alimentação.
+            A Nossa Cozinha – Marmita Saudável é conduzida pela chef Adriana Miranda, profissional apaixonada pela boa comida, pelo cuidado com as pessoas e pela vontade de transformar o cotidiano através da alimentação.
             </p>
             <p>
-            Chef Adriana Miranda Mota
-            Consultora de gastronomia com ampla experiência no setor de alimentação, Adriana é especialista em gestão de negócios e liderança de equipes de alta performance. Traz para o projeto um olhar técnico e estratégico, sempre focado em inovação, organização e excelência nos processos.
+            Chef Adriana Miranda
+            Consultora de gastronomia com ampla experiência no setor de alimentação, Adriana é especialista em gestão de negócios e liderança de equipes de alta performance. 
             </p>
             <p>
-            Chef Filipe Rodriguez
-            Proprietário do restaurante Quintal Restô desde 2010, atua como chef consultor em restaurantes, hotéis, bares e cafeterias. Agora também se reinventa como corretor de imóveis, sem deixar de lado sua essência criativa e seu compromisso com a boa gastronomia. Filipe traz ao projeto sua vivência prática e seu olhar apurado para o sabor e apresentação.
-            </p>
-            <p>
-            Chef Marcela Rodriguez
-            Também à frente do Quintal Restô, hoje concentra sua atuação na gestão administrativa, comercial e de marketing da Nossa Cozinha. Estudante da área de tecnologia, com especialização em Desenvolvimento Back End Jr., une sensibilidade estética, organização e inovação digital à proposta do projeto.
+            Traz para o projeto um olhar técnico e estratégico, sempre focado em inovação, organização e excelência nos processos. Sua missão é oferecer refeições que cuidam do corpo e acolhem com sabor e equilíbrio.
             </p>
           </div>
         </div>
@@ -120,6 +118,7 @@ export default function SobrePage() {
 
 
       </div>
+      <Footer />
     </div>
   )
 } 

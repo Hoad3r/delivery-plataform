@@ -50,7 +50,7 @@ export default function Home() {
               <span className="text-[#DB775F]">na sua casa</span>
             </h1>
             <p className="text-[clamp(1rem,2.5vw,1.5rem)] text-neutral-600 max-w-2xl mx-auto">
-              Receitas equilibradas, saborosas e feitas com cuidado, preparadas com carinho e entregues prontas para a sua rotina.
+            Receitas equilibradas, saborosas e feitas com cuidado, preparadas com carinho, congeladas para preservar a qualidade e entregues prontas para a sua rotina.
             </p>
             <div className="pt-8">
               <Link href="/cardapio">
@@ -85,12 +85,13 @@ export default function Home() {
               <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-[#FF7A3D]">Nossa filosofia</h2>
               <div className="w-16 sm:w-20 h-[1px] bg-[#DB775F]"></div>
               <p className="text-sm sm:text-base text-neutral-900 leading-relaxed">
-                Acreditamos que a verdadeira gastronomia transcende o simples ato de alimentar. É uma expressão
-                artística que envolve todos os sentidos, criando memórias que perduram muito além da refeição.
+              Acreditamos que se alimentar bem é um ato de cuidado — consigo mesmo, com o tempo e com a saúde. Por isso, desenvolvemos um modelo que alia sabor, nutrição e praticidade, com marmitas congeladas preparadas com afeto, ingredientes de verdade e equilíbrio.
               </p>
               <p className="text-sm sm:text-base text-neutral-900 leading-relaxed">
-                Cada prato é cuidadosamente elaborado pelo nosso chef executivo, combinando técnicas clássicas com
-                abordagens contemporâneas, sempre respeitando a sazonalidade e a origem dos ingredientes.
+              Congelamos cada refeição logo após o preparo para preservar o frescor, o valor nutricional e o sabor original dos pratos. Isso permite que você tenha à disposição refeições sempre prontas, saudáveis e seguras, sem abrir mão da qualidade.
+              </p>
+              <p className="text-sm sm:text-base text-neutral-900 leading-relaxed">
+              Mais do que comida congelada, oferecemos soluções reais para o seu dia a dia. Refeições que respeitam o tempo de quem tem pressa, mas não abre mão de comer bem.
               </p>
             </div>
           </div>
