@@ -82,7 +82,7 @@ export default function CheckoutContent() {
   const [currentOrderDocId, setCurrentOrderDocId] = useState<string | null>(null)
   const [addressChanged, setAddressChanged] = useState(0)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [deliveryFee, setDeliveryFee] = useState(6.0)
+  const [deliveryFee, setDeliveryFee] = useState(8.0)
   const [deliveryError, setDeliveryError] = useState<string | null>(null)
   const [calculandoEntrega, setCalculandoEntrega] = useState(false)
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null)
@@ -292,6 +292,12 @@ export default function CheckoutContent() {
                                 <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                                   <h3 style="color: #1e293b; margin-top: 0;">💰 Informações de Pagamento:</h3>
                                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                                                      <div>
+                                    <strong>Subtotal:</strong> R$ ${orderData.payment.subtotal.toFixed(2)}
+                                  </div>
+                                  <div>
+                                    <strong>Taxa de Entrega:</strong> R$ ${orderData.payment.deliveryFee.toFixed(2)}
+                                  </div>
                                     <div>
                                       <strong>Total:</strong> R$ ${orderData.payment.total.toFixed(2)}
                                     </div>
@@ -376,6 +382,12 @@ export default function CheckoutContent() {
                               <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                                 <h3 style="color: #1e293b; margin-top: 0;">💰 Informações de Pagamento:</h3>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                  <div>
+                                    <strong>Subtotal:</strong> R$ ${orderData.payment.subtotal.toFixed(2)}
+                                  </div>
+                                  <div>
+                                    <strong>Taxa de Entrega:</strong> R$ ${orderData.payment.deliveryFee.toFixed(2)}
+                                  </div>
                                   <div>
                                     <strong>Total:</strong> R$ ${orderData.payment.total.toFixed(2)}
                                   </div>
@@ -580,7 +592,7 @@ export default function CheckoutContent() {
       const cidade = "João Pessoa"
       const uf = "PB"
       if (!street || !number) {
-        setDeliveryFee(6.0)
+        setDeliveryFee(8.0)
         setDeliveryError(null)
         return
       }
@@ -591,7 +603,7 @@ export default function CheckoutContent() {
       lastAddressRef.current = enderecoCompleto
       const coords = await buscarCoordenadasPorEndereco(enderecoCompleto)
       if (!coords) {
-        setDeliveryFee(6.0)
+        setDeliveryFee(8.0)
         setDeliveryError("Não foi possível localizar o endereço. Verifique se está correto.")
       } else {
         const distancia = calcularDistanciaKm(RESTAURANTE_COORDS.lat, RESTAURANTE_COORDS.lon, coords.lat, coords.lon)
@@ -776,6 +788,8 @@ export default function CheckoutContent() {
         },
         payment: {
           method: values.paymentMethod,
+          subtotal: subtotal,
+          deliveryFee: deliveryFeeTotal,
           total: total,
           status: 'pending'
         },
@@ -946,7 +960,8 @@ export default function CheckoutContent() {
 
   // Checkout normal
   const subtotal = cart.reduce((total, item) => total + (item.price || 0) * (item.quantity || 1), 0)
-  const total = subtotal + (deliveryMethod === "delivery" ? deliveryFee : 0)
+  const deliveryFeeTotal = deliveryMethod === "delivery" ? deliveryFee : 0
+  const total = subtotal + deliveryFeeTotal
 
   // Horários disponíveis
   const horarios = [
@@ -997,7 +1012,7 @@ export default function CheckoutContent() {
                 </div>
                 <div className="flex justify-between">
                   <p>Taxa de entrega</p>
-                  <p>{deliveryMethod === "delivery" ? (calculandoEntrega ? "Calculando..." : `+${formatCurrency(deliveryFee)}`) : "Grátis"}</p>
+                  <p>{deliveryMethod === "delivery" ? (calculandoEntrega ? "Calculando..." : formatCurrency(deliveryFeeTotal)) : "Grátis"}</p>
                 </div>
                 {deliveryError && (
                   <div className="text-sm text-red-600 mt-2">{deliveryError}</div>
@@ -1044,7 +1059,7 @@ export default function CheckoutContent() {
                                         <Truck className="h-4 w-4" /> Entrega
                                       </span>
                                       <Badge variant="outline" className="ml-2">
-                                        {deliveryMethod === "delivery" ? (calculandoEntrega ? "Calculando..." : `+${formatCurrency(deliveryFee)}`) : "Grátis"}
+                                        {deliveryMethod === "delivery" ? (calculandoEntrega ? "Calculando..." : formatCurrency(deliveryFeeTotal)) : "Grátis"}
                                       </Badge>
                                     </FormLabel>
                                     <p className="text-sm text-neutral-500">

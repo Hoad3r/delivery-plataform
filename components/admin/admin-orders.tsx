@@ -94,6 +94,8 @@ type PaymentStatus = "paid" | "pending" | "refunded";
 
 interface OrderPayment {
   paymentMethod: "pix" | "credit" | "debit" | "cash";
+  subtotal: number;
+  deliveryFee: number;
   total: number;
   card?: string;
   status: PaymentStatus;
@@ -477,23 +479,29 @@ export default function AdminOrders() {
                           </div>
                         </div>
 
-                        <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                          <h3 style="color: #1e293b; margin-top: 0;">💰 Informações do Pedido:</h3>
-                          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <div>
-                              <strong>Total:</strong> R$ ${updatedOrder.payment.total.toFixed(2)}
-                            </div>
-                            <div>
-                              <strong>Método:</strong> ${paymentMethodInfo[updatedOrder.payment.paymentMethod]?.label || paymentMethodInfo.unknown.label}
-                            </div>
-                            <div>
-                              <strong>Status:</strong> <span style="color: #1e40af; font-weight: bold;">${statusInfo[newStatus].label}</span>
-                            </div>
-                            <div>
-                              <strong>Entrega:</strong> ${updatedOrder.type === 'delivery' ? 'Entrega' : 'Retirada'}
-                            </div>
-                          </div>
-                        </div>
+                                          <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="color: #1e293b; margin-top: 0;">💰 Informações do Pedido:</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                      <div>
+                        <strong>Subtotal:</strong> R$ ${updatedOrder.payment.subtotal?.toFixed(2) || '0.00'}
+                      </div>
+                      <div>
+                        <strong>Taxa de Entrega:</strong> R$ ${updatedOrder.payment.deliveryFee?.toFixed(2) || '0.00'}
+                      </div>
+                      <div>
+                        <strong>Total:</strong> R$ ${updatedOrder.payment.total.toFixed(2)}
+                      </div>
+                      <div>
+                        <strong>Método:</strong> ${paymentMethodInfo[updatedOrder.payment.paymentMethod]?.label || paymentMethodInfo.unknown.label}
+                      </div>
+                      <div>
+                        <strong>Status:</strong> <span style="color: #1e40af; font-weight: bold;">${statusInfo[newStatus].label}</span>
+                      </div>
+                      <div>
+                        <strong>Entrega:</strong> ${updatedOrder.type === 'delivery' ? 'Entrega' : 'Retirada'}
+                      </div>
+                    </div>
+                  </div>
 
                         ${updatedOrder.notes ? `
                           <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
@@ -651,6 +659,12 @@ export default function AdminOrders() {
                     <h3 style="color: #1e293b; margin-top: 0;">💰 Informações do Pedido:</h3>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                       <div>
+                        <strong>Subtotal:</strong> R$ ${pedido.payment.subtotal?.toFixed(2) || '0.00'}
+                      </div>
+                      <div>
+                        <strong>Taxa de Entrega:</strong> R$ ${pedido.payment.deliveryFee?.toFixed(2) || '0.00'}
+                      </div>
+                      <div>
                         <strong>Total:</strong> R$ ${pedido.payment.total.toFixed(2)}
                       </div>
                       <div>
@@ -745,6 +759,8 @@ export default function AdminOrders() {
         printWindow.document.write(`<li>${item.quantity}x ${item.name} - R$ ${(item.price * item.quantity).toFixed(2)}</li>`)
       })
       printWindow.document.write('</ul>')
+      printWindow.document.write(`<p><strong>Subtotal:</strong> R$ ${order.payment.subtotal?.toFixed(2) || '0.00'}</p>`)
+      printWindow.document.write(`<p><strong>Taxa de entrega:</strong> R$ ${order.payment.deliveryFee?.toFixed(2) || '0.00'}</p>`)
       printWindow.document.write(`<p><strong>Total:</strong> R$ ${order.payment.total.toFixed(2)}</p>`)
       printWindow.document.write(`<p><strong>Status:</strong> ${statusInfo[order.status].label}</p>`)
       printWindow.document.write('</body></html>')
@@ -929,7 +945,15 @@ export default function AdminOrders() {
                           <div className="text-xs text-neutral-500">{order.user.phone}</div>
                         </td>
                         <td className="py-3 px-4">{formatDate(order.createdAt)}</td>
-                        <td className="py-3 px-4">R$ {order.payment.total.toFixed(2)}</td>
+                        <td className="py-3 px-4">
+                          <div className="text-sm">
+                            <div>Total: R$ {order.payment.total.toFixed(2)}</div>
+                            <div className="text-xs text-neutral-500">
+                              Subtotal: R$ {order.payment.subtotal?.toFixed(2) || '0.00'} | 
+                              Taxa: R$ {order.payment.deliveryFee?.toFixed(2) || '0.00'}
+                            </div>
+                          </div>
+                        </td>
                         <td className="py-3 px-4">
                           <Badge
                             className={`${statusInfo[order.status].color} font-normal flex items-center gap-1 w-fit`}
@@ -1083,9 +1107,20 @@ export default function AdminOrders() {
 
                   <Separator className="my-3" />
 
-                  <div className="flex justify-between font-medium">
-                    <div>Total</div>
-                    <div>R$ {selectedOrder.payment.total.toFixed(2)}</div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <div>Subtotal</div>
+                      <div>R$ {selectedOrder.payment.subtotal?.toFixed(2) || '0.00'}</div>
+                    </div>
+                    <div className="flex justify-between">
+                      <div>Taxa de entrega</div>
+                      <div>R$ {selectedOrder.payment.deliveryFee?.toFixed(2) || '0.00'}</div>
+                    </div>
+                    <Separator className="my-2" />
+                    <div className="flex justify-between font-medium">
+                      <div>Total</div>
+                      <div>R$ {selectedOrder.payment.total.toFixed(2)}</div>
+                    </div>
                   </div>
                 </div>
 

@@ -18,20 +18,40 @@ export const RESTAURANTE_COORDS = {
 // Função para buscar coordenadas de um endereço usando Google Geocoding
 export async function buscarCoordenadasPorEndereco(endereco: string): Promise<{ lat: number; lon: number } | null> {
   const GOOGLE_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
-  if (!GOOGLE_API_KEY) return null;
+  console.log('🔍 Buscando coordenadas para:', endereco);
+  console.log('🔑 API Key existe:', !!GOOGLE_API_KEY);
+  
+  if (!GOOGLE_API_KEY) {
+    console.log('❌ API Key não configurada');
+    return null;
+  }
+  
   try {
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(endereco)}&key=${GOOGLE_API_KEY}`;
+    console.log('🌐 Fazendo requisição para:', url.replace(GOOGLE_API_KEY, '***'));
+    
     const res = await fetch(url);
     const data = await res.json();
+    
+    console.log('📡 Resposta da API:', {
+      status: data.status,
+      resultsCount: data.results?.length || 0,
+      errorMessage: data.error_message
+    });
+    
     if (data.status === "OK" && data.results && data.results.length > 0) {
       const location = data.results[0].geometry.location;
+      console.log('✅ Coordenadas encontradas:', location);
       return {
         lat: location.lat,
         lon: location.lng,
       };
+    } else {
+      console.log('❌ Endereço não encontrado ou erro na API:', data.status);
+      return null;
     }
-    return null;
   } catch (e) {
+    console.log('❌ Erro na requisição:', e);
     return null;
   }
 }

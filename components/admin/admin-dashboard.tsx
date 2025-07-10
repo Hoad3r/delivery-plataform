@@ -16,7 +16,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts"
-import { DollarSign, ShoppingBag, Users, TrendingUp, ArrowUp, ArrowDown, Filter, Download, Coffee, Clock } from "lucide-react"
+import { DollarSign, ShoppingBag, Users, TrendingUp, ArrowUp, ArrowDown, Filter, Download, Coffee, Clock, Truck } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -276,6 +276,7 @@ const processOrdersByMonth = (orders: any[]): OrderData[] => {
     const month = months[monthIndex]
     
     monthMap[month].orders += 1
+    // Usar o total que já inclui subtotal + taxa de entrega
     monthMap[month].revenue += Number(order.payment?.total || 0)
   })
   
@@ -288,22 +289,34 @@ const processCustomerData = (orders: any[], allCustomerCounts: Record<string, nu
   // Identificar clientes únicos no período filtrado
   const customersInPeriod: Record<string, boolean> = {};
   
+
+  
   orders.forEach(order => {
-    if (!order.userId) return;
-    customersInPeriod[order.userId] = true;
+    // Para usuários autenticados, usar userId
+    if (order.userId) {
+      customersInPeriod[order.userId] = true;
+    } else {
+      // Para usuários não autenticados, usar email ou telefone como identificador
+      const customerId = order.user?.email || order.user?.phone || `guest_${order.id}`;
+      customersInPeriod[customerId] = true;
+    }
   });
   
   // Lista de IDs dos clientes que fizeram pedidos no período
   const customerIds = Object.keys(customersInPeriod);
   
+
+  
   // Contar novos vs recorrentes baseado no histórico completo
-  const newCustomers = customerIds.filter(userId => 
-    !allCustomerCounts[userId] || allCustomerCounts[userId] === 1
+  const newCustomers = customerIds.filter(customerId => 
+    !allCustomerCounts[customerId] || allCustomerCounts[customerId] === 1
   ).length;
   
-  const returningCustomers = customerIds.filter(userId => 
-    allCustomerCounts[userId] && allCustomerCounts[userId] > 1
+  const returningCustomers = customerIds.filter(customerId => 
+    allCustomerCounts[customerId] && allCustomerCounts[customerId] > 1
   ).length;
+  
+
   
   return [
     { name: "Novos", value: newCustomers },
@@ -650,7 +663,8 @@ export default function AdminDashboard() {
     averageOrderValue: "0.00",
     orderGrowth: "0.0",
     revenueGrowth: "0.0",
-    averageOrdersPerCustomer: 0
+    averageOrdersPerCustomer: 0,
+    totalDeliveryFee: 0
   })
   
   // Dados processados com useMemo para evitar reprocessamento desnecessário
@@ -707,9 +721,21 @@ export default function AdminDashboard() {
         }
         
         // Considerar apenas pedidos que não foram cancelados
-        if (data.status !== 'cancelled' && userId) {
-          customerCounts[userId] = (customerCounts[userId] || 0) + 1;
+        if (data.status !== 'cancelled') {
+          // Para usuários autenticados, usar userId
+          if (userId) {
+            customerCounts[userId] = (customerCounts[userId] || 0) + 1;
+          } else {
+            // Para usuários não autenticados, usar email ou telefone como identificador
+            const customerId = data.user?.email || data.user?.phone || `guest_${doc.id}`;
+            customerCounts[customerId] = (customerCounts[customerId] || 0) + 1;
+          }
         }
+      });
+      
+      console.log('👥 Dados de clientes carregados:', {
+        totalCustomers: Object.keys(customerCounts).length,
+        totalProducts: productList.size
       });
       
       setAllCustomerOrderCounts(customerCounts);
@@ -746,15 +772,16 @@ export default function AdminDashboard() {
   const resetAllData = useCallback(() => {
     setRawOrders([]);
     setCompareOrders([]);
-    setMetrics({
-      totalOrders: 0,
-      totalRevenue: 0,
-      totalCustomers: 0,
-      averageOrderValue: "0.00",
-      orderGrowth: "0.0",
-      revenueGrowth: "0.0",
-      averageOrdersPerCustomer: 0
-    });
+          setMetrics({
+        totalOrders: 0,
+        totalRevenue: 0,
+        totalCustomers: 0,
+        averageOrderValue: "0.00",
+        orderGrowth: "0.0",
+        revenueGrowth: "0.0",
+        averageOrdersPerCustomer: 0,
+        totalDeliveryFee: 0
+      });
   }, []);
 
   // Função otimizada para carregar dados com cache
@@ -767,8 +794,8 @@ export default function AdminDashboard() {
       const cacheTimestamp = new Date().getTime();
       const cacheExpiry = 5 * 60 * 1000; // 5 minutos
       
-      // Verificar se há dados em cache válidos
-      if (cachedOrders[cacheKey] && cacheTTL[cacheKey] > cacheTimestamp) {
+      // Verificar se há dados em cache válidos (desabilitar cache para filtros avançados)
+      if (cachedOrders[cacheKey] && cacheTTL[cacheKey] > cacheTimestamp && !showAdvancedFilters) {
         console.log("Usando dados em cache para", cacheKey);
         setRawOrders(cachedOrders[cacheKey]);
         setIsLoading(false);
@@ -846,14 +873,24 @@ export default function AdminDashboard() {
         ? applyAdvancedFilters(currentOrders) 
         : currentOrders;
         
+
+        
       // Calcular métricas diretamente para exibição
       const totalOrders = filteredCurrentOrders.length;
       const totalRevenue = filteredCurrentOrders.reduce((sum, order) => 
         sum + Number(order.payment?.total || 0), 0);
+      const totalSubtotal = filteredCurrentOrders.reduce((sum, order) => 
+        sum + Number(order.payment?.subtotal || 0), 0);
+      const totalDeliveryFee = filteredCurrentOrders.reduce((sum, order) => 
+        sum + Number(order.payment?.deliveryFee || 0), 0);
         
       const compareTotalOrders = comparisonOrders.length;
       const compareTotalRevenue = comparisonOrders.reduce((sum, order) => 
         sum + Number(order.payment?.total || 0), 0);
+      const compareTotalSubtotal = comparisonOrders.reduce((sum, order) => 
+        sum + Number(order.payment?.subtotal || 0), 0);
+      const compareTotalDeliveryFee = comparisonOrders.reduce((sum, order) => 
+        sum + Number(order.payment?.deliveryFee || 0), 0);
         
       // Calcular crescimento com base nos períodos
       const orderGrowth = calculateGrowth(totalOrders, compareTotalOrders);
@@ -862,6 +899,10 @@ export default function AdminDashboard() {
       // Processar os dados do cliente para as métricas
       const customerDataProcessed = processCustomerData(filteredCurrentOrders, allCustomerOrderCounts);
       const totalCustomers = customerDataProcessed.reduce((sum, item) => sum + item.value, 0);
+      
+
+      
+
         
       // Calcular a média de pedidos por cliente
       let averageOrdersPerCustomer = 0;
@@ -872,7 +913,7 @@ export default function AdminDashboard() {
       }
         
       // Atualizar métricas calculadas
-      setMetrics({
+      const newMetrics = {
         totalOrders,
         totalRevenue,
         totalCustomers,
@@ -881,12 +922,19 @@ export default function AdminDashboard() {
           : "0.00",
         orderGrowth,
         revenueGrowth,
-        averageOrdersPerCustomer
-      });
+        averageOrdersPerCustomer,
+        totalDeliveryFee
+      };
+      
+
+      
+      setMetrics(newMetrics);
         
       // Atualizar estados com dados brutos - os useMemo cuidarão do processamento
       setRawOrders(filteredCurrentOrders);
       setCompareOrders(comparisonOrders);
+      
+
         
       // Atualizar cache
       setCachedOrders({
@@ -904,13 +952,12 @@ export default function AdminDashboard() {
       resetAllData();
       setIsLoading(false);
     }
-  }, [timeRange, showAdvancedFilters, productFilter, timeFilter, minOrderValue, allCustomerOrderCounts, 
-      cachedOrders, cacheTTL, applyAdvancedFilters, fetchAllCustomerOrders, resetAllData]);
+  }, [timeRange, showAdvancedFilters, productFilter, timeFilter, minOrderValue, allCustomerOrderCounts]);
 
   // Efeito para carregar dados principais
   useEffect(() => {
     loadData();
-  }, [timeRange, showAdvancedFilters, productFilter, timeFilter, minOrderValue, loadData]);
+  }, [loadData]);
   
   // Efeito para carregar dados específicos da aba selecionada
   useEffect(() => {
@@ -947,6 +994,8 @@ export default function AdminDashboard() {
     loadTabSpecificData();
   }, [activeTab, rawOrders.length, allCustomerOrderCounts, fetchAllCustomerOrders]);
 
+
+
   // Função otimizada para renderizar gráficos com useCallback
   const renderChart = useCallback((
     chartType: string, 
@@ -970,31 +1019,31 @@ export default function AdminDashboard() {
       );
     }
 
-    console.log(`renderChart: Verificando dados para ${chartType}:`, data);
-
     // Verificar se os dados têm valores significativos
     let hasSignificantData = false;
     
     if (chartType.includes('pie')) {
       hasSignificantData = data.some(item => (item.value || item.orders || 0) > 0);
     } else if (chartType.includes('bar') || chartType.includes('line')) {
-      // Para gráficos de barra e linha, verificar se há pelo menos um valor maior que zero
+      // Para gráficos de barra e linha, verificar se há pelo menos um valor maior ou igual a zero
       hasSignificantData = data.some(item => {
         const values = Object.values(item).filter(val => typeof val === 'number');
-        const hasPositiveValues = values.some(val => val > 0);
-        console.log(`Item ${JSON.stringify(item)} tem valores positivos:`, hasPositiveValues, values);
+        const hasPositiveValues = values.some(val => val >= 0);
         return hasPositiveValues;
       });
       
       // Para gráficos de horário, ser mais tolerante - mostrar mesmo se só um horário tem dados
       if (chartType.includes('time') || data[0]?.time) {
         const totalOrders = data.reduce((sum, item) => sum + (item.orders || 0), 0);
-        hasSignificantData = totalOrders > 0;
-        console.log(`Gráfico de horário - total de pedidos: ${totalOrders}, mostrar: ${hasSignificantData}`);
+        hasSignificantData = totalOrders >= 0;
+      }
+      
+      // Para gráficos de linha (mensal), ser mais tolerante - mostrar mesmo com valores baixos
+      if (chartType.includes('line')) {
+        const totalOrders = data.reduce((sum, item) => sum + (item.orders || 0), 0);
+        hasSignificantData = totalOrders >= 0;
       }
     }
-
-    console.log(`renderChart: Dados significativos para ${chartType}:`, hasSignificantData);
 
     if (!hasSignificantData) {
       return (
@@ -1106,7 +1155,10 @@ export default function AdminDashboard() {
                   </Button>
                   <Button 
                     size="sm"
-                    onClick={() => setShowAdvancedFilters(productFilter.length > 0 || timeFilter[0] !== 10 || timeFilter[1] !== 22 || minOrderValue > 0)}
+                    onClick={() => {
+                      const hasFilters = productFilter.length > 0 || timeFilter[0] !== 10 || timeFilter[1] !== 22 || minOrderValue > 0;
+                      setShowAdvancedFilters(hasFilters);
+                    }}
                   >
                     Aplicar
                   </Button>
@@ -1181,6 +1233,31 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Indicador de filtros ativos */}
+      {showAdvancedFilters && (
+        <div className="col-span-full mb-4 p-3 bg-blue-50 border border-blue-200 rounded-sm">
+          <div className="flex items-center gap-2 text-sm text-blue-700">
+            <Filter className="h-4 w-4" />
+            <span className="font-medium">Filtros ativos:</span>
+            {productFilter.length > 0 && (
+              <Badge variant="outline" className="text-xs">
+                {productFilter.length} produto(s)
+              </Badge>
+            )}
+            {timeFilter[0] !== 10 || timeFilter[1] !== 22 ? (
+              <Badge variant="outline" className="text-xs">
+                {timeFilter[0]}h-{timeFilter[1]}h
+              </Badge>
+            ) : null}
+            {minOrderValue > 0 && (
+              <Badge variant="outline" className="text-xs">
+                Min: R$ {minOrderValue}
+              </Badge>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Cards de resumo */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card de Total de Pedidos */}
@@ -1226,6 +1303,12 @@ export default function AdminDashboard() {
                 </span>
               )}
             </div>
+            {!isLoading && (
+              <div className="text-xs text-neutral-500 mt-2">
+                <div>Subtotal: R$ {(metrics.totalRevenue - metrics.totalDeliveryFee).toLocaleString()}</div>
+                <div>Taxa de entrega: R$ {metrics.totalDeliveryFee.toLocaleString()}</div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1245,6 +1328,7 @@ export default function AdminDashboard() {
                 </>
               )}
             </div>
+
           </CardContent>
         </Card>
 
@@ -1261,6 +1345,7 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
+
       </div>
 
       {/* Gráficos */}
@@ -1299,7 +1384,7 @@ export default function AdminDashboard() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis 
-                          domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.1)]} 
+                          domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.1))]} 
                           allowDecimals={false}
                           tickFormatter={(value) => Math.round(value).toString()}
                         />
@@ -1357,7 +1442,7 @@ export default function AdminDashboard() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="day" />
                         <YAxis 
-                          domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.1)]} 
+                          domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.1))]} 
                           allowDecimals={false}
                           tickFormatter={(value) => Math.round(value).toString()}
                         />
@@ -1400,7 +1485,7 @@ export default function AdminDashboard() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="time" />
                         <YAxis 
-                          domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.1)]} 
+                          domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.1))]} 
                           allowDecimals={false}
                           tickFormatter={(value) => Math.round(value).toString()}
                         />
@@ -1444,7 +1529,7 @@ export default function AdminDashboard() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis 
-                          domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.1)]} 
+                          domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.1))]} 
                           tickFormatter={(value) => `R$ ${value.toLocaleString()}`}
                         />
                         <Tooltip formatter={(value) => [`R$ ${value.toLocaleString()}`, "Receita"]} />
@@ -1656,7 +1741,7 @@ export default function AdminDashboard() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="region" />
                         <YAxis 
-                          domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.1)]} 
+                          domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.1))]} 
                           allowDecimals={false}
                           tickFormatter={(value) => Math.round(value).toString()}
                         />

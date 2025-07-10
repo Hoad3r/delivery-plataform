@@ -29,7 +29,7 @@ export default function SobrePage() {
         </div>
         <div className="order-1 md:order-2 relative h-[250px] sm:h-[400px] w-full">
           <Image
-            src="/placeholder.svg?height=800&width=600"
+            src="/images/banner.jpg"
             alt="Interior do restaurante"
             fill
             className="object-cover"
