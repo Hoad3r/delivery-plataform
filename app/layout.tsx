@@ -10,8 +10,8 @@ import ClientLayout from "./client-layout"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Nossa Cozinha - Delivery de Comida Refinada",
-  description: "Experimente a melhor experiência gastronômica diretamente na sua casa",
+  title: "Marmita Saudável - Delivery de Comida Saudável: Nossa Cozinha",
+  description: "Receitas equilibradas, saborosas e feitas com cuidado, preparadas com carinho, congeladas para preservar a qualidade e entregues prontas para a sua rotina.",
   verification: {
     google: "aRb_ZPkMysh369ioUVJE61bp2SPfgDHrdOtY5bvwe6E"
   },
