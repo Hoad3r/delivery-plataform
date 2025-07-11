@@ -82,7 +82,7 @@ export default function CheckoutContent() {
   const [currentOrderDocId, setCurrentOrderDocId] = useState<string | null>(null)
   const [addressChanged, setAddressChanged] = useState(0)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [deliveryFee, setDeliveryFee] = useState(8.0)
+  const [deliveryFee, setDeliveryFee] = useState(6.0)
   const [deliveryError, setDeliveryError] = useState<string | null>(null)
   const [calculandoEntrega, setCalculandoEntrega] = useState(false)
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null)
@@ -592,7 +592,7 @@ export default function CheckoutContent() {
       const cidade = "João Pessoa"
       const uf = "PB"
       if (!street || !number) {
-        setDeliveryFee(8.0)
+        setDeliveryFee(6.0)
         setDeliveryError(null)
         return
       }
@@ -603,7 +603,7 @@ export default function CheckoutContent() {
       lastAddressRef.current = enderecoCompleto
       const coords = await buscarCoordenadasPorEndereco(enderecoCompleto)
       if (!coords) {
-        setDeliveryFee(8.0)
+        setDeliveryFee(6.0)
         setDeliveryError("Não foi possível localizar o endereço. Verifique se está correto.")
       } else {
         const distancia = calcularDistanciaKm(RESTAURANTE_COORDS.lat, RESTAURANTE_COORDS.lon, coords.lat, coords.lon)
@@ -1012,7 +1012,7 @@ export default function CheckoutContent() {
                 </div>
                 <div className="flex justify-between">
                   <p>Taxa de entrega</p>
-                  <p>{deliveryMethod === "delivery" ? (calculandoEntrega ? "Calculando..." : formatCurrency(deliveryFeeTotal)) : "Grátis"}</p>
+                  <p>{calculandoEntrega ? "Calculando..." : formatCurrency(deliveryFeeTotal)}</p>
                 </div>
                 {deliveryError && (
                   <div className="text-sm text-red-600 mt-2">{deliveryError}</div>
@@ -1046,7 +1046,7 @@ export default function CheckoutContent() {
                             <RadioGroup
                               onValueChange={field.onChange}
                               defaultValue={field.value}
-                              className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                              className="grid grid-cols-1 gap-4"
                             >
                               <div className="border rounded-sm p-4 cursor-pointer hover:border-primary transition-colors">
                                 <FormItem className="flex items-start space-x-3 space-y-0">
@@ -1064,26 +1064,6 @@ export default function CheckoutContent() {
                                     </FormLabel>
                                     <p className="text-sm text-neutral-500">
                                       Receba seu pedido em casa em até 45 minutos
-                                    </p>
-                                  </div>
-                                </FormItem>
-                              </div>
-                              <div className="border rounded-sm p-4 cursor-pointer hover:border-primary transition-colors">
-                                <FormItem className="flex items-start space-x-3 space-y-0">
-                                  <FormControl>
-                                    <RadioGroupItem value="pickup" />
-                                  </FormControl>
-                                  <div className="space-y-1 flex-1">
-                                    <FormLabel className="font-medium flex items-center justify-between">
-                                      <span className="flex items-center gap-2">
-                                        <MapPin className="h-4 w-4" /> Retirada
-                                      </span>
-                                      <Badge variant="outline" className="ml-2">
-                                        Grátis
-                                      </Badge>
-                                    </FormLabel>
-                                    <p className="text-sm text-neutral-500">
-                                      Retire seu pedido em nossa loja em 30 minutos
                                     </p>
                                   </div>
                                 </FormItem>
