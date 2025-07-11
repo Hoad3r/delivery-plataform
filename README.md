@@ -27,6 +27,34 @@ Uma plataforma de delivery de marmitas com sistema de administração completo.
 - **Filtro Automático**: Pratos com estoque 0 não aparecem no menu
 - **Verificação de Disponibilidade**: Considera tanto o status quanto a quantidade disponível
 
+### Dashboard e Relatórios Analíticos
+
+- **Visão Geral**: Dashboard administrativo com visão consolidada dos principais indicadores do negócio.
+- **Indicadores-Chave**:
+  - Total de pedidos
+  - Receita total (com e sem taxa de entrega)
+  - Total arrecadado em taxas de entrega
+  - Total de clientes (novos e recorrentes)
+  - Valor médio do pedido (sem taxa de entrega)
+- **Gráficos Interativos**:
+  - Pedidos por mês, semana, dia e horário
+  - Receita por mês
+  - Distribuição de clientes (novos vs recorrentes)
+  - Produtos mais vendidos (top 5)
+  - Distribuição de vendas por produto
+  - Pedidos por região/bairro
+  - Tempo médio de entrega por região
+- **Comparação de Períodos**:
+  - Compare métricas entre períodos (hoje, semana, mês, trimestre, ano)
+  - Visualize crescimento ou queda em pedidos e receita
+- **Filtros Avançados**:
+  - Filtre por produto, horário do pedido e valor mínimo
+  - Combine múltiplos filtros para análises detalhadas
+- **Exportação de Dados**:
+  - Exporte relatórios e gráficos para Excel (CSV) com um clique
+- **Pedidos Recentes**:
+  - Lista dos últimos pedidos recebidos com status e valores
+
 ## Tecnologias
 
 - Next.js
