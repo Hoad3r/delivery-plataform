@@ -918,7 +918,7 @@ export default function AdminDashboard() {
         totalRevenue,
         totalCustomers,
         averageOrderValue: totalOrders > 0 
-          ? (totalRevenue / totalOrders).toFixed(2) 
+          ? (totalSubtotal / totalOrders).toFixed(2) 
           : "0.00",
         orderGrowth,
         revenueGrowth,
@@ -1259,7 +1259,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Cards de resumo */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Card de Total de Pedidos */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -1283,14 +1283,14 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Card de Receita Total */}
+        {/* Card de Receita Total (sem taxa de entrega) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
             <DollarSign className="h-4 w-4 text-neutral-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : `R$ ${metrics.totalRevenue.toLocaleString()}`}</div>
+            <div className="text-2xl font-bold">{isLoading ? "..." : `R$ ${(metrics.totalRevenue - metrics.totalDeliveryFee).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}</div>
             <div className="flex items-center pt-1 text-xs">
               {!isLoading && (
                 <span className={Number(metrics.revenueGrowth) > 0 ? "text-green-500 flex items-center" : "text-red-500 flex items-center"}>
@@ -1303,12 +1303,20 @@ export default function AdminDashboard() {
                 </span>
               )}
             </div>
-            {!isLoading && (
-              <div className="text-xs text-neutral-500 mt-2">
-                <div>Subtotal: R$ {(metrics.totalRevenue - metrics.totalDeliveryFee).toLocaleString()}</div>
-                <div>Taxa de entrega: R$ {metrics.totalDeliveryFee.toLocaleString()}</div>
-              </div>
-            )}
+          </CardContent>
+        </Card>
+
+        {/* Card de Taxa de Entrega */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Taxa de Entrega</CardTitle>
+            <Truck className="h-4 w-4 text-neutral-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{isLoading ? "..." : `R$ ${metrics.totalDeliveryFee.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}</div>
+            <div className="text-xs text-neutral-500 pt-1">
+              {!isLoading && `Total arrecadado em taxas de entrega`}
+            </div>
           </CardContent>
         </Card>
 
@@ -1328,7 +1336,6 @@ export default function AdminDashboard() {
                 </>
               )}
             </div>
-
           </CardContent>
         </Card>
 
@@ -1339,13 +1346,12 @@ export default function AdminDashboard() {
             <TrendingUp className="h-4 w-4 text-neutral-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : `R$ ${metrics.averageOrderValue}`}</div>
+            <div className="text-2xl font-bold">{isLoading ? "..." : `R$ ${Number(metrics.averageOrderValue).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}</div>
             <div className="text-xs text-neutral-500 pt-1">
               {!isLoading && `Baseado em ${metrics.totalOrders.toLocaleString()} pedidos`}
             </div>
           </CardContent>
         </Card>
-
       </div>
 
       {/* Gráficos */}
