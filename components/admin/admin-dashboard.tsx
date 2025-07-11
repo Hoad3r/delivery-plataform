@@ -815,6 +815,13 @@ export default function AdminDashboard() {
       
       // Configurar datas com base no período selecionado
       switch (timeRange) {
+        case "today":
+          // Período atual: hoje
+          currentStartDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 0, 0, 0, 0);
+          // Período de comparação: ontem
+          compareStartDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - 1, 0, 0, 0, 0);
+          compareEndDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 0, 0, 0, 0);
+          break;
         case "week":
           // Período atual: última semana
           currentStartDate = subDays(currentDate, 7);
@@ -1076,6 +1083,7 @@ export default function AdminDashboard() {
                 <SelectValue placeholder="Selecione o período" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="today">Hoje</SelectItem>
                 <SelectItem value="week">Última Semana</SelectItem>
                 <SelectItem value="month">Último Mês</SelectItem>
                 <SelectItem value="quarter">Último Trimestre</SelectItem>
