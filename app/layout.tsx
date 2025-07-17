@@ -6,7 +6,7 @@ import { AuthProvider } from "@/context/auth-context"
 import { CartProvider } from "@/context/cart-context"
 import { MenuProvider } from "@/contexts/menu-context"
 import ClientLayout from "./client-layout"
-
+import { Analytics } from "@vercel/analytics/next"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
@@ -38,6 +38,7 @@ export default function RootLayout({
             </MenuProvider>
           </CartProvider>
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   )
