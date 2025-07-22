@@ -1703,72 +1703,25 @@ export default function AdminDashboard() {
         {/* Conteúdo da aba Locais */}
         <TabsContent value="locations">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Gráfico de Distribuição Geográfica */}
             <Card>
               <CardHeader>
                 <CardTitle>Distribuição Geográfica</CardTitle>
                 <CardDescription>Pedidos por região</CardDescription>
               </CardHeader>
               <CardContent>
-                {(!ordersByLocation || !Array.isArray(ordersByLocation) || ordersByLocation.length === 0) ? (
-                  <div className="flex h-[300px] items-center justify-center">
-                    <p className="text-neutral-500">Nenhum dado disponível para exibir o gráfico.</p>
-                  </div>
-                ) : (
-                  <Suspense fallback={<div className="flex h-[300px] items-center justify-center"><p>Carregando mapa...</p></div>}>
-                    <LazyChart type="pie" data={ordersByLocation}>
-                      <Pie
-                        data={ordersByLocation}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }: { name: string; percent: number }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        nameKey="name"
-                      >
-                        {ordersByLocation.map((entry: OrderByLocation, index: number) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(value, name, props) => [
-                          `${typeof value === 'number' ? ((value / ordersByLocation.reduce((sum, item) => sum + (item.value || 0), 0)) * 100).toFixed(0) : 0}%`,
-                          name,
-                        ]}
-                      />
-                      <Legend />
-                    </LazyChart>
-                  </Suspense>
-                )}
+                <div className="flex h-[300px] items-center justify-center">
+                  <p className="text-neutral-500 text-center">Sem dados suficientes para exibir o gráfico de locais no momento.</p>
+                </div>
               </CardContent>
             </Card>
-
-            {/* Gráfico de Tempo Médio de Entrega */}
             <Card>
               <CardHeader>
                 <CardTitle>Tempo Médio de Entrega</CardTitle>
                 <CardDescription>Por região (em minutos)</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[300px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    {renderChart("bar", deliveryTimes, () => (
-                      <BarChart data={deliveryTimes} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="region" />
-                        <YAxis 
-                          domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.1))]} 
-                          allowDecimals={false}
-                          tickFormatter={(value) => Math.round(value).toString()}
-                        />
-                        <Tooltip formatter={(value) => [`${value} min`, "Tempo de Entrega"]} />
-                        <Legend />
-                        <Bar dataKey="time" fill="#FF8042" name="Tempo de Entrega" />
-                      </BarChart>
-                    ))}
-                  </ResponsiveContainer>
+                <div className="flex h-[300px] items-center justify-center">
+                  <p className="text-neutral-500 text-center">Sem dados suficientes para exibir o gráfico de locais no momento.</p>
                 </div>
               </CardContent>
             </Card>
