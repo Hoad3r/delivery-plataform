@@ -8,6 +8,7 @@ import AdminDishList from "@/components/admin/admin-dish-list"
 import AdminAddDish from "@/components/admin/admin-add-dish"
 import AdminDashboard from "@/components/admin/admin-dashboard"
 import AdminOrders from "@/components/admin/admin-orders"
+import CuponsAdminPage from "./cupons/page";
 
 export default function AdminPage() {
   const { user, logout } = useAuth()
@@ -40,7 +41,7 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList className="grid grid-cols-4 mb-6 md:mb-8 h-auto">
+        <TabsList className="grid grid-cols-5 mb-6 md:mb-8 h-auto">
           <TabsTrigger value="dashboard" className="text-xs md:text-sm py-2 px-1 md:py-3 md:px-4">
             Dashboard
           </TabsTrigger>
@@ -52,6 +53,9 @@ export default function AdminPage() {
           </TabsTrigger>
           <TabsTrigger value="add" className="text-xs md:text-sm py-2 px-1 md:py-3 md:px-4">
             Adicionar Prato
+          </TabsTrigger>
+          <TabsTrigger value="cupons" className="text-xs md:text-sm py-2 px-1 md:py-3 md:px-4">
+            Cupons
           </TabsTrigger>
         </TabsList>
 
@@ -69,6 +73,10 @@ export default function AdminPage() {
 
         <TabsContent value="add">
           <AdminAddDish />
+        </TabsContent>
+
+        <TabsContent value="cupons">
+          <CuponsAdminPage />
         </TabsContent>
       </Tabs>
     </div>

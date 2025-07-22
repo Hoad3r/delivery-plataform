@@ -628,10 +628,10 @@ export default function CheckoutContent() {
     try {
       // Validar campos obrigatórios para usuários não autenticados
       if (!isAuthenticated) {
-        if (!values.name || !values.phone) {
+        if (!values.name || !values.phone || !values.email) {
           toast({
             title: "Campos obrigatórios",
-            description: "Por favor, preencha seu nome e telefone para continuar.",
+            description: "Por favor, preencha seu nome, telefone e email para continuar.",
             variant: "destructive",
           })
           setIsSubmitting(false)
