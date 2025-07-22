@@ -20,11 +20,12 @@ type Cupom = {
   tipo: string;
   valor?: number;
   descricao?: string;
+  codigo?: string; // Novo campo
 };
 
 export default function CuponsAdminPage() {
   const [cupons, setCupons] = useState<Cupom[]>([]);
-  const [form, setForm] = useState({ ativo: true, tipo: "frete_gratis", valor: "" });
+  const [form, setForm] = useState({ ativo: true, tipo: "frete_gratis", valor: "", codigo: "" });
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const { toast } = useToast();
@@ -46,9 +47,10 @@ export default function CuponsAdminPage() {
       body: JSON.stringify({
         ...form,
         valor: form.tipo === "desconto" ? Number(form.valor) : undefined,
+        codigo: form.codigo?.trim() || undefined,
       }),
     });
-    setForm({ ativo: true, tipo: "frete_gratis", valor: "" });
+    setForm({ ativo: true, tipo: "frete_gratis", valor: "", codigo: "" });
     setLoading(false);
     fetchCupons();
   }
@@ -120,7 +122,7 @@ export default function CuponsAdminPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 items-end">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 items-end">
           <div>
             <label className="block text-xs mb-1">Tipo</label>
             <select value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))} className="w-full border rounded px-2 py-1">
@@ -133,6 +135,10 @@ export default function CuponsAdminPage() {
               <Input type="number" value={form.valor} onChange={e => setForm(f => ({ ...f, valor: e.target.value }))} className="w-full" />
             </div>
           )}
+          <div>
+            <label className="block text-xs mb-1">Código</label>
+            <Input type="text" value={form.codigo} onChange={e => setForm(f => ({ ...f, codigo: e.target.value.toUpperCase() }))} className="w-full" maxLength={20} placeholder="EX: FRETEGRATIS10" required />
+          </div>
           <div className="flex items-center gap-2">
             <Switch checked={form.ativo} onCheckedChange={v => setForm(f => ({ ...f, ativo: v }))} />
             <span className={form.ativo ? "text-green-700" : "text-red-700"}>{form.ativo ? "Ativo" : "Inativo"}</span>
@@ -144,6 +150,7 @@ export default function CuponsAdminPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-neutral-50">
               <tr>
+                <th className="py-2 px-2 text-left font-light text-neutral-500">Código</th>
                 <th className="py-2 px-2 text-left font-light text-neutral-500">Tipo</th>
                 <th className="py-2 px-2 text-left font-light text-neutral-500">Valor</th>
                 <th className="py-2 px-2 text-center font-light text-neutral-500">Status</th>
@@ -153,11 +160,12 @@ export default function CuponsAdminPage() {
             <tbody>
               {filteredCupons.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-neutral-400">Nenhum cupom encontrado.</td>
+                  <td colSpan={5} className="py-8 text-center text-neutral-400">Nenhum cupom encontrado.</td>
                 </tr>
               ) : (
                 filteredCupons.map(c => (
                   <tr key={c.id} className="border-t hover:bg-neutral-50">
+                    <td className="py-2 px-2 font-mono text-xs">{c.codigo}</td>
                     <td className="py-2 px-2">
                       {tipos.find(t => t.value === c.tipo)?.icon} {tipos.find(t => t.value === c.tipo)?.label || c.tipo}
                     </td>
