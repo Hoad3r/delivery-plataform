@@ -604,6 +604,7 @@ const calculateGrowth = (current: number, previous: number) => {
 // Processar dados para pedidos por localização
 const processOrdersByLocation = (orders: any[]): OrderByLocation[] => {
   // Objeto para armazenar contagem por bairro
+  if (!orders || !Array.isArray(orders)) return [];
   const bairroCounts: Record<string, number> = {}
   
   orders.forEach(order => {
@@ -683,7 +684,10 @@ export default function AdminDashboard() {
     }))
   }, [rawOrders, compareOrders])
   
-  const ordersByLocation = useMemo(() => processOrdersByLocation(rawOrders), [rawOrders])
+  const ordersByLocation = useMemo(() => {
+    const result = processOrdersByLocation(rawOrders);
+    return Array.isArray(result) ? result : [];
+  }, [rawOrders])
   const weeklyOrders = useMemo(() => {
     const processed = processWeeklyOrders(rawOrders)
     const compareProcessed = processWeeklyOrders(compareOrders)
