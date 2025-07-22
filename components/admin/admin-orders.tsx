@@ -122,6 +122,8 @@ interface Order {
   payment: OrderPayment;
   notes: string;
   statusHistory?: Record<string, any>;
+  scheduledDate?: string;
+  scheduledTime?: string;
 }
 
 type SortableKey = "createdAt" | "total";
@@ -281,7 +283,9 @@ export default function AdminOrders() {
           notes: data.notes || '',
           createdAt,
           updatedAt: data.updatedAt || createdAt,
-          statusHistory: data.statusHistory || {}
+          statusHistory: data.statusHistory || {},
+          scheduledDate: data.scheduledDate || null,
+          scheduledTime: data.scheduledTime || null,
         } as Order
       })
 
@@ -912,18 +916,13 @@ export default function AdminOrders() {
                     <th className="text-left py-3 px-4 font-medium">ID</th>
                     <th className="text-left py-3 px-4 font-medium">Cliente</th>
                     <th className="text-left py-3 px-4 font-medium">
-                      <div className="flex items-center cursor-pointer" onClick={() => requestSort("createdAt")}>
-                        Data
-                      </div>
+                      <div className="flex items-center cursor-pointer" onClick={() => requestSort("createdAt")}>Data</div>
                     </th>
+                    <th className="text-left py-3 px-4 font-medium">Agendamento</th>
                     <th className="text-left py-3 px-4 font-medium">
-                      <div className="flex items-center cursor-pointer" onClick={() => requestSort("total")}>
-                        Valor
-                      </div>
+                      <div className="flex items-center cursor-pointer" onClick={() => requestSort("total")}>Valor</div>
                     </th>
-                    <th className="text-left py-3 px-4 font-medium">
-                      Status
-                    </th>
+                    <th className="text-left py-3 px-4 font-medium">Status</th>
                     <th className="text-left py-3 px-4 font-medium">Pagamento</th>
                     <th className="text-left py-3 px-4 font-medium">Entrega</th>
                     <th className="text-center py-3 px-4 font-medium">Ações</th>
@@ -932,7 +931,7 @@ export default function AdminOrders() {
                 <tbody>
                   {displayedOrders.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-8 text-neutral-500">
+                      <td colSpan={9} className="text-center py-8 text-neutral-500">
                         Nenhum pedido encontrado com os filtros selecionados.
                       </td>
                     </tr>
@@ -945,6 +944,16 @@ export default function AdminOrders() {
                           <div className="text-xs text-neutral-500">{order.user.phone}</div>
                         </td>
                         <td className="py-3 px-4">{formatDate(order.createdAt)}</td>
+                        <td className="py-3 px-4">
+                          {order.scheduledDate || order.scheduledTime ? (
+                            <div className="flex flex-col text-xs">
+                              {order.scheduledDate && <span>Data: {order.scheduledDate}</span>}
+                              {order.scheduledTime && <span>Horário: {order.scheduledTime}</span>}
+                            </div>
+                          ) : (
+                            <span className="text-neutral-400">-</span>
+                          )}
+                        </td>
                         <td className="py-3 px-4">
                           <div className="text-sm">
                             <div>Total: R$ {order.payment.total.toFixed(2)}</div>
@@ -1161,6 +1170,15 @@ export default function AdminOrders() {
                       <div>
                         <span className="text-neutral-500 text-sm">Endereço:</span>
                         <div>{selectedOrder.delivery.address}</div>
+                      </div>
+                    )}
+                    {(selectedOrder.scheduledDate || selectedOrder.scheduledTime) && (
+                      <div>
+                        <span className="text-neutral-500 text-sm">Agendamento:</span>
+                        <div>
+                          {selectedOrder.scheduledDate && <span>Data: {selectedOrder.scheduledDate}</span>}
+                          {selectedOrder.scheduledTime && <span className="ml-2">Horário: {selectedOrder.scheduledTime}</span>}
+                        </div>
                       </div>
                     )}
                   </div>
