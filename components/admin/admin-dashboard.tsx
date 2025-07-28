@@ -1402,7 +1402,11 @@ export default function AdminDashboard() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis 
-                          domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.1))]} 
+                          domain={[0, (dataMax: number) => {
+                            // Calcular o valor máximo real dos dados
+                            const maxOrders = Math.max(...orderData.map(d => d.orders));
+                            return Math.max(maxOrders, 1) + 1;
+                          }]} 
                           allowDecimals={false}
                           tickFormatter={(value) => Math.round(value).toString()}
                         />
@@ -1460,7 +1464,10 @@ export default function AdminDashboard() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="day" />
                         <YAxis 
-                          domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.1))]} 
+                          domain={[0, (dataMax: number) => {
+                            // Sempre usar 1 a mais do valor máximo encontrado
+                            return Math.max(dataMax, 1) + 1;
+                          }]} 
                           allowDecimals={false}
                           tickFormatter={(value) => Math.round(value).toString()}
                         />
@@ -1503,7 +1510,10 @@ export default function AdminDashboard() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="time" />
                         <YAxis 
-                          domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.1))]} 
+                          domain={[0, (dataMax: number) => {
+                            // Sempre usar 1 a mais do valor máximo encontrado
+                            return Math.max(dataMax, 1) + 1;
+                          }]} 
                           allowDecimals={false}
                           tickFormatter={(value) => Math.round(value).toString()}
                         />
@@ -1547,7 +1557,14 @@ export default function AdminDashboard() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis 
-                          domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.1))]} 
+                          domain={[0, (dataMax: number) => {
+                            // Se não há dados ou todos são zero, usar 1
+                            if (dataMax === 0) return 1;
+                            
+                            // Para receita, usar 20% de margem
+                            const margin = Math.max(1, Math.ceil(dataMax * 0.2));
+                            return dataMax + margin;
+                          }]} 
                           tickFormatter={(value) => `R$ ${value.toLocaleString()}`}
                         />
                         <Tooltip formatter={(value) => [`R$ ${value.toLocaleString()}`, "Receita"]} />
