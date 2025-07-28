@@ -186,7 +186,7 @@ export default function MenuItems() {
 
             <div className="absolute bottom-0 left-0 right-0 p-4">
               <h3 className="text-lg font-bold text-white mb-1">{dish.name}</h3>
-              <p className="text-xs text-white/90 line-clamp-2 mb-2">{dish.description}</p>
+              <p className="text-xs text-white/90 mb-2">{dish.description}</p>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-lg font-bold text-white group-hover:text-[#DB775F] transition-colors duration-300">
                   {formatCurrency(dish.price)}
