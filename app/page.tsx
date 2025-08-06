@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import FeaturedDishes from "@/components/featured-dishes"
 import { motion as m } from "framer-motion"
+import CarouselHome from "@/components/ui/carousel-home"
 
 export default function Home() {
   return (
@@ -65,6 +66,9 @@ export default function Home() {
           </m.div>
         </div>
       </section>
+
+      {/* Carrossel de Imagens do Admin */}
+      <CarouselHome />
 
       {/* Sobre nós - Seção minimalista */}
       <section className="py-16 sm:py-24 relative overflow-hidden min-h-[400px]">
