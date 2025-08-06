@@ -33,7 +33,7 @@ import { useAuth } from "@/context/auth-context"
 import { formatCurrency, calcularDistanciaKm, calcularTaxaEntrega, buscarCoordenadasPorEndereco, RESTAURANTE_COORDS } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, serverTimestamp, getDocs, query, doc, updateDoc, getDoc, where, onSnapshot, doc as firestoreDoc } from "firebase/firestore"
+import { collection, addDoc, serverTimestamp, getDocs, query, doc, updateDoc, getDoc, where } from "firebase/firestore"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Define validation schema
@@ -87,10 +87,12 @@ export default function CheckoutContent() {
   const [calculandoEntrega, setCalculandoEntrega] = useState(false)
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null)
   const lastAddressRef = useRef("")
-  const [cupom, setCupom] = useState<string>("");
-  const [cupomInfo, setCupomInfo] = useState<any>(null);
-  const [cupomErro, setCupomErro] = useState<string | null>(null);
-  const [cupomValidando, setCupomValidando] = useState(false);
+  
+  // Estados para cupom
+  const [cupomCodigo, setCupomCodigo] = useState("")
+  const [cupomAplicado, setCupomAplicado] = useState<any>(null)
+  const [cupomLoading, setCupomLoading] = useState(false)
+  const [cupomError, setCupomError] = useState<string | null>(null)
 
   // Utilidades para datas
   const diasSemana = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
@@ -157,28 +159,28 @@ export default function CheckoutContent() {
   const decreaseStockForOrder = async (orderItems: any[]) => {
     try {
       console.log('📦 Diminuindo estoque para os itens do pedido...');
-
+      
       for (const item of orderItems) {
         // Buscar o prato no Firestore pelo ID
         const dishesRef = collection(db, "dishes");
         const q = query(dishesRef, where("id", "==", item.id));
         const dishSnapshot = await getDocs(q);
-
+        
         if (!dishSnapshot.empty) {
           const dishDoc = dishSnapshot.docs[0];
           const dishData = dishDoc.data();
           const currentStock = dishData.availableQuantity || 0;
           const newStock = Math.max(0, currentStock - item.quantity);
-
+          
           // Atualizar o estoque
-          await updateDoc(firestoreDoc(db, "dishes", dishDoc.id), {
+          await updateDoc(doc(db, "dishes", dishDoc.id), {
             availableQuantity: newStock,
             // Se o estoque chegou a 0, marcar como indisponível
             isAvailable: newStock > 0
           });
-
+          
           console.log(`✅ Estoque atualizado para ${item.name}: ${currentStock} → ${newStock}`);
-
+          
           // Se o estoque chegou a 0, mostrar alerta
           if (newStock === 0) {
             console.log(`⚠️ Estoque esgotado para ${item.name}`);
@@ -187,7 +189,7 @@ export default function CheckoutContent() {
           console.warn(`⚠️ Prato não encontrado: ${item.name} (ID: ${item.id})`);
         }
       }
-
+      
       console.log('✅ Estoque atualizado com sucesso para todos os itens!');
     } catch (error) {
       console.error('❌ Erro ao atualizar estoque:', error);
@@ -195,271 +197,288 @@ export default function CheckoutContent() {
     }
   };
 
-  // Remover o polling para /api/mercadopago/status
-  // Substituir por escuta do pedido no Firestore
+  // Poll Mercado Pago for payment status when paymentId is set
   useEffect(() => {
-    if (!currentOrderDocId) return;
-    const orderRef = firestoreDoc(db, "orders", currentOrderDocId);
-    const unsubscribe = onSnapshot(orderRef, (orderDoc) => {
+    let intervalId: NodeJS.Timeout | null = null;
 
+    if (paymentId) {
+      console.log('🚀 Iniciando verificação de pagamento:', paymentId);
+      intervalId = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/mercadopago/status?id=${paymentId}`);
+          const data = await response.json();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+          if (response.ok) {
+            if (data.status === 'approved') {
+              console.log('🎉 Pagamento aprovado! Atualizando pedido...');
+              // Payment confirmed - Update order status in Firestore
+              try {
+                if (currentOrderDocId) {
+                  const orderRef = doc(db, "orders", currentOrderDocId);
+                  const updateData = {
+                    status: "pending",
+                    payment: {
+                      status: "paid",
+                      approvedAt: new Date().toISOString(),
+                      total: data.transaction_details?.total_paid_amount,
+                      paymentId: paymentId,
+                      paymentMethod: data.payment_method_id,
+                      transactionId: data.transaction_details?.transaction_id
+                    },
+                    statusHistory: {
+                      pending: {
+                        timestamp: new Date(),
+                        note: "Pagamento aprovado, pedido confirmado"
+                      }
+                    }
+                  };
+                  await updateDoc(orderRef, updateData);
+                  console.log('✅ Pedido atualizado com sucesso!');
+                  
+                  // Buscar dados completos do pedido para enviar emails
+                  const orderDoc = await getDoc(orderRef);
                   if (orderDoc.exists()) {
                     const orderData = orderDoc.data();
-        // Quando o status mudar para 'pending' (ou 'confirmado'), finalize o fluxo
-        if (orderData.status === "pending" || orderData.status === "confirmado") {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+                    
+                                      // Diminuir o estoque dos pratos
+                  try {
+                    await decreaseStockForOrder(orderData.items);
+                  } catch (stockError) {
+                    console.error('❌ Erro ao atualizar estoque:', stockError);
+                    // Não interromper o fluxo se houver erro no estoque
+                    toast({
+                      title: "Aviso",
+                      description: "Pedido confirmado, mas houve um problema ao atualizar o estoque. Entre em contato com o suporte.",
+                      variant: "destructive"
+                    });
+                  }
+                  
+                  // Registrar uso do cupom se aplicado
+                  if (orderData.cupom) {
+                    try {
+                      await fetch('/api/cupons/aplicar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          cupomId: orderData.cupom.id,
+                          userId: orderData.userId
+                        })
+                      });
+                      console.log('✅ Uso do cupom registrado com sucesso');
+                    } catch (cupomError) {
+                      console.error('❌ Erro ao registrar uso do cupom:', cupomError);
+                      // Não interromper o fluxo se houver erro no cupom
+                    }
+                  }
+                    
+                    // Enviar emails de confirmação
+                    try {
+                      // 1. Email para o cliente
+                      if (orderData.user?.email) {
+                        const clientEmailResponse = await fetch('/api/send-email', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({
+                            to: orderData.user.email,
+                            subject: `🎉 Pedido #${orderData.id} Pago - Aguardando Confirmação`,
+                            html: `
+                              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px; background-color: #f8fafc;">
+                                <div style="text-align: center; margin-bottom: 20px;">
+                                  <h1 style="color: #059669; margin: 0;">PEDIDO PAGO!</h1>
+                                  <p style="color: #059669; font-size: 18px; font-weight: bold; margin: 5px 0;">Pedido #${orderData.id}</p>
+                                </div>
+                                <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #059669; margin-bottom: 20px;">
+                                  <h2 style="color: #1e293b; margin-top: 0;">✅ Pagamento Confirmado</h2>
+                                  <p style="font-size: 16px; color: #374151;">Seu pagamento foi confirmado com sucesso!</p>
+                                </div>
+                                <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                  <h3 style="color: #1e293b; margin-top: 0;">📋 Seu Pedido:</h3>
+                                  <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px;">
+                                    <ul style="list-style: none; padding: 0; margin: 0;">
+                                      ${orderData.items.map((item: any) => `
+                                        <li style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;">
+                                          <span><strong>${item.quantity}x</strong> ${item.name}</span>
+                                          <span style="font-weight: bold;">R$ ${(item.price * item.quantity).toFixed(2)}</span>
+                                        </li>
+                                      `).join('')}
+                                    </ul>
+                                  </div>
+                                </div>
+                                <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                  <h3 style="color: #166534; margin-top: 0;">📅 Entrega Agendada</h3>
+                                  <p style="font-size: 16px; color: #166534; margin: 0;">
+                                    <strong>Data:</strong> ${orderData.scheduledDate}<br/>
+                                    <strong>Horário:</strong> ${orderData.scheduledTime}
+                                  </p>
+                                </div>
+                                <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                  <h3 style="color: #1e293b; margin-top: 0;">💰 Informações de Pagamento:</h3>
+                                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                                                      <div>
+                                    <strong>Subtotal:</strong> R$ ${orderData.payment.subtotal.toFixed(2)}
+                                  </div>
+                                  <div>
+                                    <strong>Taxa de Entrega:</strong> R$ ${orderData.payment.deliveryFee.toFixed(2)}
+                                  </div>
+                                    <div>
+                                      <strong>Total:</strong> R$ ${orderData.payment.total.toFixed(2)}
+                                    </div>
+                                    <div>
+                                      <strong>Método:</strong> PIX
+                                    </div>
+                                    <div>
+                                      <strong>Status:</strong> <span style="color: #059669; font-weight: bold;">PAGO</span>
+                                    </div>
+                                    <div>
+                                      <strong>Entrega:</strong> ${orderData.type === 'delivery' ? 'Entrega' : 'Retirada'}
+                                    </div>
+                                  </div>
+                                </div>
+                                ${orderData.notes ? `
+                                  <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                    <h3 style="color: #1e293b; margin-top: 0;">📝 Observações:</h3>
+                                    <p style="background-color: #fef3c7; padding: 10px; border-radius: 5px; margin: 0;">${orderData.notes}</p>
+                                  </div>
+                                ` : ''}
+                                <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #f59e0b;">
+                                  <h3 style="color: #92400e; margin-top: 0;">⏳ AGUARDANDO CONFIRMAÇÃO</h3>
+                                  <p style="color: #92400e; font-size: 16px; font-weight: bold; margin: 0;">
+                                    Seu pedido está aguardando o restaurante aceitar!
+                                  </p>
+                                  <p style="color: #92400e; font-size: 14px; margin: 5px 0 0 0;">
+                                    Você receberá uma notificação assim que o pedido for aceito e começar a ser preparado.
+                                  </p>
+                                </div>
+                                <div style="text-align: center; margin-top: 20px; color: #64748b; font-size: 14px;">
+                                  <p>Agradecemos a preferência!</p>
+                                  <p><strong>Nossa Cozinha</strong></p>
+                                </div>
+                              </div>
+                            `
+                          }),
+                        });
+                        if (!clientEmailResponse.ok) {
+                          console.error('Erro ao enviar email para cliente');
+                        }
+                      }
+                      // 2. Email para o restaurante
+                      const restaurantEmailResponse = await fetch('/api/send-email', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          to: 'nossacozinhajp@gmail.com',
+                          subject: `🚨 PEDIDO PAGO - #${orderData.id} - PREPARAR IMEDIATAMENTE`,
+                          html: `
+                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px; background-color: #fef2f2;">
+                              <div style="text-align: center; margin-bottom: 20px;">
+                                <h1 style="color: #dc2626; margin: 0;">🚨 PEDIDO PAGO!</h1>
+                                <p style="color: #dc2626; font-size: 18px; font-weight: bold; margin: 5px 0;">Pedido #${orderData.id}</p>
+                                <p style="color: #dc2626; font-size: 16px; margin: 5px 0;">PREPARAR IMEDIATAMENTE</p>
+                              </div>
+                              <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #dc2626; margin-bottom: 20px;">
+                                <h2 style="color: #1e293b; margin-top: 0;">✅ Pagamento Confirmado</h2>
+                                <p style="font-size: 16px; color: #374151;">O pagamento do pedido foi confirmado e está pronto para preparo!</p>
+                              </div>
+                              <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                <h3 style="color: #1e293b; margin-top: 0;">📋 Detalhes do Pedido:</h3>
+                                <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px;">
+                                  <ul style="list-style: none; padding: 0; margin: 0;">
+                                    ${orderData.items.map((item: any) => `
+                                      <li style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;">
+                                        <span><strong>${item.quantity}x</strong> ${item.name}</span>
+                                        <span style="font-weight: bold;">R$ ${(item.price * item.quantity).toFixed(2)}</span>
+                                      </li>
+                                    `).join('')}
+                                  </ul>
+                                </div>
+                              </div>
+                              <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                <h3 style="color: #166534; margin-top: 0;">📅 Entrega Agendada</h3>
+                                <p style="font-size: 16px; color: #166534; margin: 0;">
+                                  <strong>Data:</strong> ${orderData.scheduledDate}<br/>
+                                  <strong>Horário:</strong> ${orderData.scheduledTime}
+                                </p>
+                              </div>
+                              <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                <h3 style="color: #1e293b; margin-top: 0;">💰 Informações de Pagamento:</h3>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                  <div>
+                                    <strong>Subtotal:</strong> R$ ${orderData.payment.subtotal.toFixed(2)}
+                                  </div>
+                                  <div>
+                                    <strong>Taxa de Entrega:</strong> R$ ${orderData.payment.deliveryFee.toFixed(2)}
+                                  </div>
+                                  <div>
+                                    <strong>Total:</strong> R$ ${orderData.payment.total.toFixed(2)}
+                                  </div>
+                                  <div>
+                                    <strong>Método:</strong> PIX
+                                  </div>
+                                  <div>
+                                    <strong>Status:</strong> <span style="color: #059669; font-weight: bold;">PAGO</span>
+                                  </div>
+                                  <div>
+                                    <strong>Entrega:</strong> ${orderData.type === 'delivery' ? 'Entrega' : 'Retirada'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                <h3 style="color: #1e293b; margin-top: 0;">👤 Cliente:</h3>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                  <div>
+                                    <strong>Nome:</strong> ${orderData.user.name}
+                                  </div>
+                                  <div>
+                                    <strong>Telefone:</strong> ${orderData.user.phone}
+                                  </div>
+                                  ${orderData.type === 'delivery' && orderData.delivery.address ? `
+                                    <div style="grid-column: 1 / -1;">
+                                      <strong>Endereço:</strong> ${orderData.delivery.address}
+                                    </div>
+                                  ` : ''}
+                                </div>
+                              </div>
+                              ${orderData.notes ? `
+                                <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                                  <h3 style="color: #1e293b; margin-top: 0;">📝 Observações:</h3>
+                                  <p style="background-color: #fef3c7; padding: 10px; border-radius: 5px; margin: 0;">${orderData.notes}</p>
+                                </div>
+                              ` : ''}
+                              <div style="background-color: #dbeafe; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #3b82f6;">
+                                <h3 style="color: #1e40af; margin-top: 0;">🚀 AÇÃO NECESSÁRIA</h3>
+                                <p style="color: #1e40af; font-size: 16px; font-weight: bold; margin: 0;">
+                                  O pedido está pronto para ser preparado!
+                                </p>
+                                <p style="color: #1e40af; font-size: 14px; margin: 5px 0 0 0;">
+                                  Tempo estimado: ${orderData.type === 'delivery' ? '45 minutos' : '30 minutos'}
+                                </p>
+                              </div>
+                              <div style="text-align: center; margin-top: 20px; color: #64748b; font-size: 14px;">
+                                <p><strong>Nossa Cozinha - Sistema de Pedidos</strong></p>
+                              </div>
+                            </div>
+                          `
+                        }),
+                      });
+                      if (!restaurantEmailResponse.ok) {
+                        console.error('Erro ao enviar email para restaurante');
+                      }
+                    } catch (emailError) {
+                      console.error('❌ Erro ao enviar emails:', emailError);
+                    }
+                  }
+                } else {
+                  console.error('❌ ID do pedido não encontrado');
+                }
+              } catch (updateError) {
+                console.error('❌ Erro ao atualizar pedido:', updateError);
+              }
+              // Stop polling and redirect
+              clearInterval(intervalId!);
               setPixQrCode(null);
               setPixCode(null);
               setPaymentId(null);
@@ -472,10 +491,10 @@ export default function CheckoutContent() {
                 variant: "success"
               });
               router.push("/pedido-confirmado");
-        }
-        // Tratar rejeição/cancelamento
-        if (orderData.payment?.status === "rejected" || orderData.payment?.status === "cancelled") {
-
+            } else if (data.status === 'rejected' || data.status === 'cancelled') {
+              console.log('❌ Pagamento rejeitado:', data.status);
+              // Payment failed or cancelled
+              clearInterval(intervalId!);
               setPixQrCode(null);
               setPixCode(null);
               setPaymentId(null);
@@ -486,31 +505,84 @@ export default function CheckoutContent() {
                 variant: "destructive"
               });
             }
-
-
-
-
-
-
-
-
-
-
-
-
-
+            // Keep polling for other statuses (pending, in_process, etc.)
+          } else {
+            console.error('❌ Erro ao verificar status:', data);
+          }
+        } catch (error) {
+          console.error('❌ Erro na verificação de pagamento:', error);
+        }
+      }, 15000); // Poll every 15 seconds
+    }
+    // Cleanup interval on component unmount or when paymentId changes to null
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
       }
-    });
-    return () => unsubscribe();
-  }, [currentOrderDocId, clearCart, toast, router]);
+    };
+  }, [paymentId, currentOrderDocId, router, clearCart, toast]);
+
+  // Função para validar cupom
+  const validarCupom = async () => {
+    if (!cupomCodigo.trim()) {
+      setCupomError("Digite um código de cupom")
+      return
+    }
+    
+    setCupomLoading(true)
+    setCupomError(null)
+    
+    try {
+      // Calcular quantidade total de itens no carrinho
+      const quantidadeItens = cart.reduce((total, item) => total + (item.quantity || 1), 0)
+      
+      const response = await fetch('/api/cupons/validar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigo: cupomCodigo.trim(),
+          userId: isAuthenticated ? user?.id : null,
+          valorPedido: subtotal,
+          quantidadeItens: quantidadeItens
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (response.ok) {
+        setCupomAplicado(data.cupom)
+        toast({
+          title: "Cupom aplicado!",
+          description: data.cupom.descricao,
+          variant: "success"
+        })
+      } else {
+        setCupomError(data.error || "Erro ao validar cupom")
+        if (data.detalhes) {
+          setCupomError(data.detalhes.join(', '))
+        }
+      }
+    } catch (error) {
+      setCupomError("Erro ao validar cupom")
+    } finally {
+      setCupomLoading(false)
+    }
+  }
+
+  // Função para remover cupom
+  const removerCupom = () => {
+    setCupomAplicado(null)
+    setCupomCodigo("")
+    setCupomError(null)
+  }
 
   // Função para gerar novo QR Code PIX para pedido existente
   const generateNewPixForOrder = async (orderDocId: string) => {
     try {
       setErrorMsg(null)
       console.log('🔄 Gerando novo PIX para pedido:', orderDocId)
-      const orderRef = firestoreDoc(db, 'orders', orderDocId)
-      const orderDoc = await getDoc(orderRef);
+      const orderRef = doc(db, 'orders', orderDocId)
+      const orderDoc = await getDoc(orderRef)
       if (!orderDoc.exists()) {
         setErrorMsg('Pedido não encontrado. Verifique o link ou tente novamente.')
         toast({
@@ -644,21 +716,21 @@ export default function CheckoutContent() {
           return
         }
       }
-
+      
       // Verificar disponibilidade de estoque antes de processar o pedido
       try {
         console.log('🔍 Verificando disponibilidade de estoque...');
         const dishesRef = collection(db, "dishes");
-
+        
         for (const cartItem of cart) {
           const q = query(dishesRef, where("id", "==", cartItem.id));
           const dishSnapshot = await getDocs(q);
-
+          
           if (!dishSnapshot.empty) {
             const dishData = dishSnapshot.docs[0].data();
             const availableStock = dishData.availableQuantity || 0;
             const requestedQuantity = cartItem.quantity || 1;
-
+            
             if (availableStock < requestedQuantity) {
               toast({
                 title: "Estoque insuficiente",
@@ -707,7 +779,7 @@ export default function CheckoutContent() {
       // Save address if authenticated, delivery is selected, and saveAddress is checked
       if (isAuthenticated && user?.id && values.deliveryMethod === "delivery" && values.saveAddress) {
         try {
-          const userRef = firestoreDoc(db, 'users', user.id);
+          const userRef = doc(db, 'users', user.id);
           const userDoc = await getDoc(userRef);
           if (userDoc.exists()) {
             const userData = userDoc.data();
@@ -769,19 +841,6 @@ export default function CheckoutContent() {
       // 1. Primeiro criar o pedido no Firestore
       const orderId = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
       const orderRef = collection(db, 'orders');
-      // Cálculo do subtotal, taxa de entrega e total com cupom
-      const subtotal = cart.reduce((total, item) => total + (item.price || 0) * (item.quantity || 1), 0)
-      let descontoCupom = 0;
-      let deliveryFeeTotal = deliveryMethod === "delivery" ? deliveryFee : 0;
-      if (cupomInfo) {
-        if (cupomInfo.tipo === "desconto" && cupomInfo.valor) {
-          descontoCupom = Math.min(Number(cupomInfo.valor), subtotal);
-        } else if (cupomInfo.tipo === "frete_gratis") {
-          deliveryFeeTotal = 0;
-        }
-        // Se quiser implementar "marmita_gratis", pode adicionar lógica aqui
-      }
-      const total = subtotal - descontoCupom + deliveryFeeTotal;
       const orderData = {
         id: orderId,
         userId: isAuthenticated ? user?.id : null,
@@ -800,24 +859,25 @@ export default function CheckoutContent() {
           options: item.options || {}
         })),
         delivery: {
-          address: values.deliveryMethod === 'delivery' ?
-            `${values.streetName}, ${values.number}${values.complement ? ` - ${values.complement}` : ''}` :
+          address: values.deliveryMethod === 'delivery' ? 
+            `${values.streetName}, ${values.number}${values.complement ? ` - ${values.complement}` : ''}` : 
             null,
           time: values.deliveryMethod === 'delivery' ? '45 minutos' : '30 minutos'
         },
         payment: {
           method: values.paymentMethod,
           subtotal: subtotal,
-          descontoCupom: descontoCupom,
           deliveryFee: deliveryFeeTotal,
           total: total,
-          status: 'pending',
-          cupom: cupomInfo ? {
-            codigo: cupomInfo.codigo,
-            tipo: cupomInfo.tipo,
-            valor: cupomInfo.valor || null
-          } : null
+          status: 'pending'
         },
+        cupom: cupomAplicado ? {
+          id: cupomAplicado.id,
+          codigo: cupomAplicado.codigo,
+          tipo: cupomAplicado.tipo,
+          valor: cupomAplicado.valor,
+          desconto: descontoCupom
+        } : null,
         notes: values.notes || '',
         scheduledDate,
         scheduledTime,
@@ -885,32 +945,6 @@ export default function CheckoutContent() {
     }
   }
 
-  async function validarCupom() {
-    setCupomErro(null);
-    setCupomValidando(true);
-    setCupomInfo(null);
-    try {
-      const res = await fetch(`/api/cupons?codigo=${encodeURIComponent(cupom.trim().toUpperCase())}`);
-      if (!res.ok) throw new Error("Erro ao buscar cupom");
-      const data = await res.json();
-      if (!data || !Array.isArray(data) || data.length === 0) {
-        setCupomErro("Cupom não encontrado ou inválido.");
-        setCupomInfo(null);
-      } else if (!data[0].ativo) {
-        setCupomErro("Cupom inativo.");
-        setCupomInfo(null);
-      } else {
-        setCupomInfo(data[0]);
-        setCupomErro(null);
-        toast({ title: "Cupom aplicado!", description: `Benefício: ${data[0].tipo === 'desconto' ? `R$ ${data[0].valor} de desconto` : data[0].tipo === 'frete_gratis' ? 'Frete grátis' : 'Brinde'}` });
-      }
-    } catch (e) {
-      setCupomErro("Erro ao validar cupom.");
-      setCupomInfo(null);
-    }
-    setCupomValidando(false);
-  }
-
   if (!mounted) {
     return (
       <div className="container mx-auto px-4 py-24 max-w-3xl pt-28">
@@ -957,9 +991,9 @@ export default function CheckoutContent() {
               <div className="flex flex-col items-center justify-center text-center space-y-6">
                 <h2 className="text-2xl font-medium">Pague com PIX</h2>
                 <div className="bg-white p-4 rounded-lg shadow-lg">
-                  <img
-                    src={`data:image/png;base64,${pixQrCode}`}
-                    alt="QR Code PIX"
+                  <img 
+                    src={`data:image/png;base64,${pixQrCode}`} 
+                    alt="QR Code PIX" 
                     className="w-64 h-64"
                   />
                 </div>
@@ -1011,17 +1045,33 @@ export default function CheckoutContent() {
 
   // Checkout normal
   const subtotal = cart.reduce((total, item) => total + (item.price || 0) * (item.quantity || 1), 0)
-  let descontoCupom = 0;
-  let deliveryFeeTotal = deliveryMethod === "delivery" ? deliveryFee : 0;
-  if (cupomInfo) {
-    if (cupomInfo.tipo === "desconto" && cupomInfo.valor) {
-      descontoCupom = Math.min(Number(cupomInfo.valor), subtotal);
-    } else if (cupomInfo.tipo === "frete_gratis") {
-      deliveryFeeTotal = 0;
+  let deliveryFeeTotal = deliveryMethod === "delivery" ? deliveryFee : 0
+  
+  // Calcular desconto do cupom
+  let descontoCupom = 0
+  
+  if (cupomAplicado) {
+    switch (cupomAplicado.tipo) {
+      case 'desconto':
+        descontoCupom = cupomAplicado.valor || 0
+        break
+      case 'frete_gratis':
+        deliveryFeeTotal = 0
+        break
+      case 'marmita_gratis':
+        // Encontrar o item mais barato para dar de graça (apenas 1 unidade)
+        if (cart.length > 0) {
+          // Ordenar itens por preço (menor para maior) e pegar o primeiro
+          const itensOrdenados = [...cart].sort((a, b) => (a.price || 0) - (b.price || 0))
+          const itemMaisBarato = itensOrdenados[0]
+          // Desconto apenas de 1 unidade do item mais barato
+          descontoCupom = itemMaisBarato.price || 0
+        }
+        break
     }
-    // Se quiser implementar "marmita_gratis", pode adicionar lógica aqui
   }
-  const total = subtotal - descontoCupom + deliveryFeeTotal;
+  
+  const total = subtotal + deliveryFeeTotal - descontoCupom
 
   // Horários disponíveis
   const horarios = [
@@ -1047,30 +1097,6 @@ export default function CheckoutContent() {
               <h2 className="text-xl font-medium">Resumo do Pedido</h2>
             </div>
             <div className="p-6">
-              {/* Campo de cupom */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">Cupom de desconto</label>
-                <div className="flex gap-2">
-                  <Input
-                    type="text"
-                    placeholder="Digite o código"
-                    value={cupom}
-                    onChange={e => setCupom(e.target.value.toUpperCase())}
-                    className="rounded-none"
-                    maxLength={20}
-                    disabled={!!cupomInfo}
-                  />
-                  <Button type="button" onClick={validarCupom} disabled={cupomValidando || !cupom.trim() || !!cupomInfo}>
-                    {cupomValidando ? "Validando..." : "Aplicar"}
-                  </Button>
-                  {cupomInfo && (
-                    <Button type="button" variant="outline" onClick={() => { setCupom(""); setCupomInfo(null); setCupomErro(null); }}>Remover</Button>
-                  )}
-                </div>
-                {cupomErro && <div className="text-red-600 text-xs mt-1">{cupomErro}</div>}
-                {cupomInfo && <div className="text-green-700 text-xs mt-1">Cupom aplicado: <b>{cupomInfo.codigo}</b> ({cupomInfo.tipo === 'desconto' ? `R$ ${cupomInfo.valor} de desconto` : cupomInfo.tipo === 'frete_gratis' ? 'Frete grátis' : 'Brinde'})</div>}
-              </div>
-              {/* Fim campo de cupom */}
               <div className="space-y-4">
                 {cart.map((item) => (
                   <div key={item.id} className="flex justify-between">
@@ -1094,12 +1120,6 @@ export default function CheckoutContent() {
                   <p>Subtotal</p>
                   <p>{formatCurrency(subtotal)}</p>
                 </div>
-                {cupomInfo && cupomInfo.tipo === "desconto" && descontoCupom > 0 && (
-                  <div className="flex justify-between text-green-700">
-                    <p>Desconto ({cupomInfo.codigo})</p>
-                    <p>-{formatCurrency(descontoCupom)}</p>
-                  </div>
-                )}
                 <div className="flex justify-between">
                   <p>Taxa de entrega</p>
                   <p>{calculandoEntrega ? "Calculando..." : formatCurrency(deliveryFeeTotal)}</p>
@@ -1107,11 +1127,59 @@ export default function CheckoutContent() {
                 {deliveryError && (
                   <div className="text-sm text-red-600 mt-2">{deliveryError}</div>
                 )}
+                {cupomAplicado && (
+                  <div className="flex justify-between text-green-600">
+                    <p>Cupom {cupomAplicado.codigo}</p>
+                    <p>-{formatCurrency(descontoCupom)}</p>
+                  </div>
+                )}
                 <Separator className="my-2" />
                 <div className="flex justify-between font-medium text-lg">
                   <p>Total</p>
                   <p>{formatCurrency(total)}</p>
                 </div>
+              </div>
+              
+              {/* Campo de cupom */}
+              <div className="mt-4 pt-4 border-t border-neutral-200">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Código do cupom"
+                    value={cupomCodigo}
+                    onChange={(e) => setCupomCodigo(e.target.value.toUpperCase())}
+                    className="flex-1 text-sm"
+                    disabled={cupomLoading}
+                  />
+                  {cupomAplicado ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={removerCupom}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      Remover
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={validarCupom}
+                      disabled={cupomLoading || !cupomCodigo.trim()}
+                    >
+                      {cupomLoading ? "..." : "Aplicar"}
+                    </Button>
+                  )}
+                </div>
+                {cupomError && (
+                  <p className="text-sm text-red-600 mt-1">{cupomError}</p>
+                )}
+                {cupomAplicado && (
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm">
+                    <p className="text-green-800 font-medium">{cupomAplicado.descricao}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1246,11 +1314,13 @@ export default function CheckoutContent() {
                             </SelectTrigger>
                             <SelectContent>
                                <SelectItem value="custom">Inserir novo endereço</SelectItem>
-                              {addresses.map(address => (
-                                <SelectItem key={address.id} value={address.id}>
-                                  {address.street}, {address.number} - {address.neighborhood}
-                                </SelectItem>
-                              ))}
+                              {addresses
+                                .filter(address => address && address.id) // Filter out addresses without valid IDs
+                                .map((address, index) => (
+                                  <SelectItem key={address.id || `address-${index}`} value={address.id}>
+                                    {address.street}, {address.number} - {address.neighborhood}
+                                  </SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
                         </div>
@@ -1527,9 +1597,9 @@ export default function CheckoutContent() {
             <div className="flex flex-col items-center justify-center text-center space-y-6">
               <h2 className="text-2xl font-medium">Pague com PIX</h2>
               <div className="bg-white p-4 rounded-lg shadow-lg">
-                <img
-                  src={`data:image/png;base64,${pixQrCode}`}
-                  alt="QR Code PIX"
+                <img 
+                  src={`data:image/png;base64,${pixQrCode}`} 
+                  alt="QR Code PIX" 
                   className="w-64 h-64"
                 />
               </div>

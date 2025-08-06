@@ -13,6 +13,7 @@ import {
   Printer,
   MessageSquare,
   Plus,
+  Trash2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,7 +32,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, orderBy, getDocs, where, limit, startAfter, Timestamp, getDoc } from "firebase/firestore"
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, orderBy, getDocs, where, limit, startAfter, Timestamp, getDoc, deleteDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/hooks/use-auth"
 import { format } from "date-fns"
@@ -140,6 +141,11 @@ export default function AdminOrders() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [orderDetailsOpen, setOrderDetailsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+
+  // Estados para exclusão de pedidos
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Adicionar estados para paginação
   const [lastVisible, setLastVisible] = useState<any>(null)
@@ -780,6 +786,47 @@ export default function AdminOrders() {
     window.open(url, '_blank')
   }, [])
 
+  // Função para excluir pedido com useCallback
+  const handleDeleteOrder = useCallback(async () => {
+    if (!orderToDelete) return
+
+    setIsDeleting(true)
+    try {
+      console.log(`Excluindo pedido ${orderToDelete.id} (docId: ${orderToDelete.docId})`)
+      
+      // Excluir o documento do Firestore
+      const orderRef = doc(db, "orders", orderToDelete.docId)
+      await deleteDoc(orderRef)
+      
+      // Remover o pedido da lista local
+      setOrders(prevOrders => prevOrders.filter(order => order.docId !== orderToDelete.docId))
+      
+      // Fechar o diálogo e limpar o estado
+      setDeleteDialogOpen(false)
+      setOrderToDelete(null)
+      
+      toast({
+        title: "Pedido excluído",
+        description: `Pedido #${orderToDelete.id} foi excluído com sucesso.`,
+      })
+    } catch (error) {
+      console.error("Erro ao excluir pedido:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir o pedido. Tente novamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [orderToDelete, toast])
+
+  // Função para abrir diálogo de confirmação de exclusão
+  const openDeleteDialog = useCallback((order: Order) => {
+    setOrderToDelete(order)
+    setDeleteDialogOpen(true)
+  }, [])
+
   // Processar o histórico de status para a linha do tempo com useMemo
   const getStatusTimeline = useCallback((order: Order) => {
     const timeline = [];
@@ -1047,6 +1094,16 @@ export default function AdminOrders() {
                                   <DropdownMenuItem onClick={() => handleContact(order)}>
                                   <MessageSquare className="h-4 w-4 mr-2" /> Contatar Cliente
                                 </DropdownMenuItem>
+
+                                  {/* cancelled: opção de exclusão */}
+                                  {order.status === "cancelled" && (
+                                    <DropdownMenuItem 
+                                      onClick={() => openDeleteDialog(order)}
+                                      className="text-red-600 focus:text-red-600"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" /> Excluir Pedido
+                                    </DropdownMenuItem>
+                                  )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -1329,6 +1386,61 @@ export default function AdminOrders() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Confirmar Exclusão</DialogTitle>
+            <div className="text-sm text-muted-foreground">
+              <p>Tem certeza que deseja excluir o pedido #{orderToDelete?.id}?</p>
+              <br />
+              <p><strong>Esta ação não pode ser desfeita.</strong></p>
+              <br />
+              <div className="bg-red-50 border border-red-200 rounded-sm p-3">
+                <div className="text-sm text-red-800">
+                  <strong>Cliente:</strong> {orderToDelete?.user.name}
+                </div>
+                <div className="text-sm text-red-800">
+                  <strong>Data:</strong> {orderToDelete ? formatDate(orderToDelete.createdAt) : ''}
+                </div>
+                <div className="text-sm text-red-800">
+                  <strong>Total:</strong> R$ {orderToDelete?.payment.total.toFixed(2)}
+                </div>
+              </div>
+            </div>
+          </DialogHeader>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setDeleteDialogOpen(false)
+                setOrderToDelete(null)
+              }}
+              disabled={isDeleting}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteOrder}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <span className="animate-spin mr-2">◌</span>
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir Pedido
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
