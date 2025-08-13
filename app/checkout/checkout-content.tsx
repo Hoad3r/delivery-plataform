@@ -82,7 +82,14 @@ export default function CheckoutContent() {
   const [currentOrderDocId, setCurrentOrderDocId] = useState<string | null>(null)
   const [addressChanged, setAddressChanged] = useState(0)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [deliveryFee, setDeliveryFee] = useState(6.0)
+  const [deliveryFee, setDeliveryFee] = useState(() => {
+    // Recuperar taxa de entrega do localStorage se existir
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('deliveryFee')
+      return saved ? parseFloat(saved) : 6.0
+    }
+    return 6.0
+  })
   const [deliveryError, setDeliveryError] = useState<string | null>(null)
   const [calculandoEntrega, setCalculandoEntrega] = useState(false)
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null)
@@ -663,6 +670,10 @@ export default function CheckoutContent() {
       if (deliveryMethod !== "delivery") {
         setDeliveryFee(0)
         setDeliveryError(null)
+        // Salvar no localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('deliveryFee', '0')
+        }
         return
       }
       const street = form.getValues("streetName")
@@ -672,6 +683,10 @@ export default function CheckoutContent() {
       if (!street || !number) {
         setDeliveryFee(6.0)
         setDeliveryError(null)
+        // Salvar no localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('deliveryFee', '6.0')
+        }
         return
       }
       const enderecoCompleto = `${street}, ${number}, ${cidade}, ${uf}`
@@ -683,21 +698,53 @@ export default function CheckoutContent() {
       if (!coords) {
         setDeliveryFee(6.0)
         setDeliveryError("Não foi possível localizar o endereço. Verifique se está correto.")
+        // Salvar no localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('deliveryFee', '6.0')
+        }
       } else {
         const distancia = calcularDistanciaKm(RESTAURANTE_COORDS.lat, RESTAURANTE_COORDS.lon, coords.lat, coords.lon)
         const taxa = calcularTaxaEntrega(distancia)
         if (taxa === null) {
           setDeliveryFee(0)
           setDeliveryError("Endereço fora da área de entrega (máx. 10km do restaurante)")
+          // Salvar no localStorage
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('deliveryFee', '0')
+          }
         } else {
           setDeliveryFee(taxa)
           setDeliveryError(null)
+          // Salvar no localStorage
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('deliveryFee', taxa.toString())
+          }
         }
       }
       setCalculandoEntrega(false)
     }, 700)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliveryMethod, form.watch("streetName"), form.watch("number")])
+
+  // Função para limpar taxa de entrega quando mudar método de entrega
+  const handleDeliveryMethodChange = (value: string) => {
+    if (value === "pickup") {
+      setDeliveryFee(0)
+      setDeliveryError(null)
+      // Salvar no localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('deliveryFee', '0')
+      }
+    } else {
+      // Restaurar taxa padrão para delivery
+      setDeliveryFee(6.0)
+      setDeliveryError(null)
+      // Salvar no localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('deliveryFee', '6.0')
+      }
+    }
+  }
 
   // Handle form submission
   async function onSubmit(values: CheckoutFormValues) {
@@ -806,38 +853,20 @@ export default function CheckoutContent() {
           });
         }
       }
-      // Garantir data e horário válidos
-      let scheduledDate = values.scheduledDate;
-      let scheduledTime = values.scheduledTime;
-      const horarios = ["10h - 12h", "12h - 14h", "14h - 17h"];
-      function getNextWeekdayDate(weekday: number) {
-        const today = new Date();
-        const result = new Date(today);
-        result.setDate(today.getDate() + ((7 + weekday - today.getDay()) % 7 || 7));
-        return result;
+      // Validar campos de agendamento obrigatórios
+      if (!values.scheduledDate || !values.scheduledTime) {
+        toast({
+          title: "Agendamento obrigatório",
+          description: "Por favor, selecione a data e horário da entrega.",
+          variant: "destructive",
+        })
+        setIsSubmitting(false)
+        return
       }
-      const hoje = new Date();
-      const isHojeTercaOuQuarta = hoje.getDay() === 2 || hoje.getDay() === 3;
-      if (!scheduledDate) {
-        if (isHojeTercaOuQuarta) {
-          scheduledDate = hoje.toLocaleDateString('pt-BR');
-        } else {
-          const terca = getNextWeekdayDate(2);
-          scheduledDate = terca.toLocaleDateString('pt-BR');
-        }
-      }
-      if (!scheduledTime) {
-        // Se for hoje, pega o próximo horário disponível
-        if (isHojeTercaOuQuarta) {
-          const horaAtual = hoje.getHours();
-          if (horaAtual < 10) scheduledTime = horarios[0];
-          else if (horaAtual < 12) scheduledTime = horarios[1];
-          else if (horaAtual < 14) scheduledTime = horarios[2];
-          else scheduledTime = horarios[0]; // Se já passou de todos, agenda para o próximo horário do próximo dia
-        } else {
-          scheduledTime = horarios[0];
-        }
-      }
+      
+      // Usar os valores selecionados pelo usuário
+      const scheduledDate = values.scheduledDate;
+      const scheduledTime = values.scheduledTime;
       // 1. Primeiro criar o pedido no Firestore
       const orderId = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
       const orderRef = collection(db, 'orders');
@@ -1202,7 +1231,10 @@ export default function CheckoutContent() {
                         <FormItem>
                           <FormControl>
                             <RadioGroup
-                              onValueChange={field.onChange}
+                              onValueChange={(value) => {
+                                field.onChange(value)
+                                handleDeliveryMethodChange(value)
+                              }}
                               defaultValue={field.value}
                               className="grid grid-cols-1 gap-4"
                             >
@@ -1216,9 +1248,9 @@ export default function CheckoutContent() {
                                       <span className="flex items-center gap-2">
                                         <Truck className="h-4 w-4" /> Entrega
                                       </span>
-                                      <Badge variant="outline" className="ml-2">
-                                        {deliveryMethod === "delivery" ? (calculandoEntrega ? "Calculando..." : formatCurrency(deliveryFeeTotal)) : "Grátis"}
-                                      </Badge>
+                                                                              <Badge variant="outline" className="ml-2">
+                                          {deliveryMethod === "delivery" ? (calculandoEntrega ? "Calculando..." : formatCurrency(deliveryFee)) : "Grátis"}
+                                        </Badge>
                                     </FormLabel>
                                     <p className="text-sm text-neutral-500">
                                       Receba seu pedido em casa em até 45 minutos
@@ -1529,15 +1561,22 @@ export default function CheckoutContent() {
                     </div>
                   )}
                   {/* CAMPOS DE AGENDAMENTO */}
+                  <div className="mb-4">
+                    <p className="text-sm text-neutral-600 mb-2">
+                      <span className="text-red-500">*</span> Campos obrigatórios para agendamento
+                    </p>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                     <FormField
                       control={form.control}
                       name="scheduledDate"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Dia da entrega</FormLabel>
+                          <FormLabel className="flex items-center gap-1">
+                            Dia da entrega <span className="text-red-500">*</span>
+                          </FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
-                            <SelectTrigger>
+                            <SelectTrigger className={!field.value ? "border-red-500" : ""}>
                               <SelectValue placeholder="Escolha o dia" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1554,9 +1593,11 @@ export default function CheckoutContent() {
                       name="scheduledTime"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Horário da entrega</FormLabel>
+                          <FormLabel className="flex items-center gap-1">
+                            Horário da entrega <span className="text-red-500">*</span>
+                          </FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
-                            <SelectTrigger>
+                            <SelectTrigger className={!field.value ? "border-red-500" : ""}>
                               <SelectValue placeholder="Escolha o horário" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1574,7 +1615,11 @@ export default function CheckoutContent() {
                   <Button
                     type="submit"
                     className="w-full rounded-none bg-primary text-white hover:bg-primary/90"
-                    disabled={isSubmitting || (deliveryMethod === "delivery" && (!form.getValues("streetName") || !form.getValues("postalCode") || !form.getValues("number")))}
+                    disabled={isSubmitting || 
+                      (deliveryMethod === "delivery" && (!form.getValues("streetName") || !form.getValues("postalCode") || !form.getValues("number"))) ||
+                      !form.getValues("scheduledDate") || 
+                      !form.getValues("scheduledTime")
+                    }
                     key={addressChanged}
                   >
                     {isSubmitting ? (
