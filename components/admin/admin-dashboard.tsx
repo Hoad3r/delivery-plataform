@@ -325,7 +325,7 @@ const processCustomerData = (orders: any[], allCustomerCounts: Record<string, nu
 }
 
 // Processar dados para pratos populares
-const processPopularDishes = (orders: any[]): PopularDish[] => {
+const processPopularDishes = (orders: any[], limit?: number): PopularDish[] => {
   const dishCount: Record<string, number> = {}
   
   orders.forEach(order => {
@@ -337,20 +337,22 @@ const processPopularDishes = (orders: any[]): PopularDish[] => {
     })
   })
   
-  // Converter para array, ordenar e pegar os top 5
+  // Converter para array, ordenar e aplicar limite se especificado
   const dishesArray = Object.entries(dishCount)
     .map(([name, orders]) => ({ name, orders }))
     .sort((a, b) => b.orders - a.orders)
-    .slice(0, 5)
+  
+  // Aplicar limite se especificado, senão mostrar todos
+  const limitedDishes = limit ? dishesArray.slice(0, limit) : dishesArray
   
   // Se não houver pratos, retornar array vazio
-  if (dishesArray.length === 0) return []
+  if (limitedDishes.length === 0) return []
   
   // Calcular o total de pedidos para porcentagens
-  const totalOrders = dishesArray.reduce((sum, dish) => sum + dish.orders, 0)
+  const totalOrders = limitedDishes.reduce((sum, dish) => sum + dish.orders, 0)
   
   // Adicionar porcentagens
-  return dishesArray.map(dish => ({
+  return limitedDishes.map(dish => ({
     ...dish,
     percentage: Math.round((dish.orders / totalOrders) * 100)
   }))
@@ -642,6 +644,9 @@ export default function AdminDashboard() {
   // Estados para armazenar produtos disponíveis para filtro
   const [availableProducts, setAvailableProducts] = useState<string[]>([])
   
+  // Estado para controlar se mostrar todos os produtos ou apenas top 5
+  const [showAllProducts, setShowAllProducts] = useState(false)
+  
   // Implementação de cache local para dados do Firestore
   const [cachedOrders, setCachedOrders] = useState<Record<string, any[]>>({})
   const [cacheTTL, setCacheTTL] = useState<Record<string, number>>({})
@@ -672,7 +677,10 @@ export default function AdminDashboard() {
   const orderData = useMemo(() => processOrdersByMonth(rawOrders), [rawOrders])
   const compareOrderData = useMemo(() => processOrdersByMonth(compareOrders), [compareOrders])
   const customerData = useMemo(() => processCustomerData(rawOrders, allCustomerOrderCounts), [rawOrders, allCustomerOrderCounts])
-  const popularDishes = useMemo(() => processPopularDishes(rawOrders), [rawOrders])
+  const popularDishes = useMemo(() => 
+    processPopularDishes(rawOrders, showAllProducts ? undefined : 5), 
+    [rawOrders, showAllProducts]
+  )
   const ordersByTime = useMemo(() => {
     const processed = processOrdersByTime(rawOrders)
     const compareProcessed = processOrdersByTime(compareOrders)
@@ -1653,37 +1661,72 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Lista de Produtos Mais Populares */}
             <Card>
-              <CardHeader>
-                <CardTitle>Produtos Mais Populares</CardTitle>
-                <CardDescription>Top 5 produtos mais vendidos</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Produtos Mais Populares</CardTitle>
+                  <CardDescription>
+                    {showAllProducts ? 'Todos os produtos' : 'Top 5 produtos mais vendidos'}
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAllProducts(!showAllProducts)}
+                    className="gap-2"
+                  >
+                    {showAllProducts ? 'Mostrar Top 5' : 'Ver Todos'}
+                  </Button>
+                  <Badge variant="outline" className="text-xs">
+                    {showAllProducts ? `${popularDishes.length} produtos` : 'Top 5'}
+                  </Badge>
+                </div>
               </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="flex h-[300px] items-center justify-center">
-                    <p className="text-neutral-500">Carregando dados...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {popularDishes.map((dish, index) => (
-                      <div key={index} className="flex items-center">
-                        <div className="w-8 text-sm text-neutral-500">{index + 1}.</div>
-                        <div className="flex-1">
-                          <div className="text-sm font-medium">{dish.name}</div>
-                          <div className="text-xs text-neutral-500">{dish.orders} pedidos</div>
+                              <CardContent>
+                  {isLoading ? (
+                    <div className="flex h-[300px] items-center justify-center">
+                      <p className="text-neutral-500">Carregando dados...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Informações adicionais quando mostrando todos os produtos */}
+                      {showAllProducts && (
+                        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-sm">
+                          <div className="text-sm text-blue-700">
+                            <strong>Total de produtos únicos:</strong> {popularDishes.length}
+                          </div>
                         </div>
-                        <div className="w-16 text-right text-sm font-medium">{dish.percentage}%</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
+                      )}
+                      
+                      {popularDishes.map((dish, index) => (
+                        <div key={index} className="flex items-center">
+                          <div className="w-8 text-sm text-neutral-500">{index + 1}.</div>
+                          <div className="flex-1">
+                            <div className="text-sm font-medium">{dish.name}</div>
+                            <div className="text-xs text-neutral-500">{dish.orders} pedidos</div>
+                          </div>
+                          <div className="w-16 text-right text-sm font-medium">{dish.percentage}%</div>
+                        </div>
+                      ))}
+                      
+                      {/* Mensagem quando não há produtos */}
+                      {popularDishes.length === 0 && (
+                        <div className="text-center py-8 text-neutral-500">
+                          Nenhum produto encontrado
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
             </Card>
 
             {/* Gráfico de Distribuição de Vendas por Produto */}
             <Card>
               <CardHeader>
                 <CardTitle>Distribuição de Vendas por Produto</CardTitle>
-                <CardDescription>Porcentagem de vendas por produto</CardDescription>
+                <CardDescription>
+                  {showAllProducts ? 'Porcentagem de vendas por produto (todos os produtos)' : 'Porcentagem de vendas por produto (top 5)'}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[300px] w-full">

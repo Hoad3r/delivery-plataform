@@ -890,10 +890,80 @@ export default function AdminOrders() {
     // Ordenar a timeline por timestamp
     timeline.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     
-    return timeline;
-  }, []);
+      return timeline;
+}, []);
 
-  // Usar o valor memoizado na renderização
+// Função para recalcular taxa de entrega com useCallback
+const recalculateDeliveryFee = useCallback(async (order: Order) => {
+  try {
+    // Calcular a soma dos itens
+    const itemsTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    
+    // Calcular a diferença entre o total e a soma dos itens
+    const calculatedDeliveryFee = order.payment.total - itemsTotal;
+    
+    // Verificar se a diferença faz sentido (deve ser positiva)
+    if (calculatedDeliveryFee < 0) {
+      toast({
+        title: "Erro no cálculo",
+        description: "O total do pedido é menor que a soma dos itens. Verifique os valores.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Atualizar o documento no Firestore
+    const orderRef = doc(db, "orders", order.docId);
+    await updateDoc(orderRef, {
+      'payment.deliveryFee': calculatedDeliveryFee,
+      'payment.subtotal': itemsTotal,
+      updatedAt: serverTimestamp(),
+    });
+    
+    // Atualizar o pedido na lista local
+    setOrders(prevOrders =>
+      prevOrders.map(o =>
+        o.docId === order.docId
+          ? {
+              ...o,
+              payment: {
+                ...o.payment,
+                deliveryFee: calculatedDeliveryFee,
+                subtotal: itemsTotal,
+              },
+            }
+          : o
+      )
+    );
+    
+    // Se o pedido selecionado for o mesmo, atualizar também
+    if (selectedOrder && selectedOrder.docId === order.docId) {
+      setSelectedOrder(prev => prev ? {
+        ...prev,
+        payment: {
+          ...prev.payment,
+          deliveryFee: calculatedDeliveryFee,
+          subtotal: itemsTotal,
+        },
+      } : null);
+    }
+    
+    toast({
+      title: "Taxa recalculada",
+      description: `Taxa de entrega atualizada para R$ ${calculatedDeliveryFee.toFixed(2)}`,
+    });
+    
+  } catch (error) {
+    console.error("Erro ao recalcular taxa de entrega:", error);
+    toast({
+      title: "Erro",
+      description: "Não foi possível recalcular a taxa de entrega.",
+      variant: "destructive",
+    });
+  }
+}, [selectedOrder, toast]);
+
+// Usar o valor memoizado na renderização
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-4 justify-between">
@@ -1093,6 +1163,11 @@ export default function AdminOrders() {
 
                                   <DropdownMenuItem onClick={() => handleContact(order)}>
                                   <MessageSquare className="h-4 w-4 mr-2" /> Contatar Cliente
+                                </DropdownMenuItem>
+
+                                {/* Nova opção: Recalcular taxa de entrega */}
+                                <DropdownMenuItem onClick={() => recalculateDeliveryFee(order)}>
+                                  <Plus className="h-4 w-4 mr-2" /> Recalcular Taxa de Entrega
                                 </DropdownMenuItem>
 
                                   {/* cancelled: opção de exclusão */}
