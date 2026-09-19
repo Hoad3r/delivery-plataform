@@ -6,19 +6,38 @@ import { collection, getDocs, query, orderBy } from 'firebase/firestore'
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel'
 import Image from 'next/image'
 
+// Imagens exibidas na versão demo quando não há imagens cadastradas no
+// Firestore (ou quando o backend não está acessível), para o carrossel
+// da home nunca ficar em carregamento infinito nem vazio.
+const fallbackImages = [
+  { id: "fallback-1", url: "/images/banner.jpg" },
+  { id: "fallback-2", url: "/images/nossaequipe.jpg" },
+]
+
 export default function CarouselHome() {
   const [images, setImages] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let isMounted = true
+
     const fetchImages = async () => {
-      setLoading(true)
-      const q = query(collection(db, 'carouselImages'), orderBy('createdAt', 'desc'))
-      const querySnapshot = await getDocs(q)
-      setImages(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
-      setLoading(false)
+      try {
+        const q = query(collection(db, 'carouselImages'), orderBy('createdAt', 'desc'))
+        const querySnapshot = await getDocs(q)
+        const fetched = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        if (isMounted) setImages(fetched.length > 0 ? fetched : fallbackImages)
+      } catch (error) {
+        if (isMounted) setImages(fallbackImages)
+      } finally {
+        if (isMounted) setLoading(false)
+      }
     }
     fetchImages()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   if (loading) {

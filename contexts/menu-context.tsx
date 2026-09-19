@@ -1,10 +1,8 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect } from "react"
-import { Order } from "@/lib/mock-data"
+import React, { createContext, useContext, useState } from "react"
+import { Order, mockDishes } from "@/lib/mock-data"
 import { Dish } from "@/types/menu"
-import { collection, query, where, getDocs, doc, writeBatch, serverTimestamp, onSnapshot, QuerySnapshot, DocumentData } from "firebase/firestore"
-import { db } from "@/lib/firebase" // Assumindo que você tem um arquivo de configuração do Firebase em lib/firebase.ts ou .js
 
 interface MenuContextType {
   dishes: Dish[]
@@ -24,27 +22,13 @@ interface MenuContextType {
 const MenuContext = createContext<MenuContextType | undefined>(undefined)
 
 export function MenuProvider({ children }: { children: React.ReactNode }) {
-  const [dishes, setDishes] = useState<Dish[]>([])
+  // Versão demo/portfolio: os pratos vêm de dados mockados (lib/mock-data.ts)
+  // em vez de uma leitura em tempo real do Firestore, para o site funcionar
+  // de forma independente sem precisar de um backend configurado.
+  const [dishes] = useState<Dish[]>(() =>
+    mockDishes.filter((dish) => dish.isAvailable && dish.availableQuantity > 0)
+  )
   const [orders, setOrders] = useState<Order[]>([])
-
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "dishes"), (snapshot: QuerySnapshot<DocumentData>) => {
-      const fetchedDishes: Dish[] = []
-      snapshot.forEach((doc) => {
-        const dishData = doc.data()
-        // Só inclui pratos que estão disponíveis E têm quantidade > 0
-        const isAvailable = dishData.isAvailable === true || dishData.isAvailable === undefined
-        const hasQuantity = (dishData.availableQuantity || 0) > 0
-        
-        if (isAvailable && hasQuantity) {
-          fetchedDishes.push({ id: doc.id, ...dishData } as Dish)
-        }
-      })
-              setDishes(fetchedDishes)
-    })
-
-    return () => unsubscribe()
-  }, [])
 
   const getDishAvailability = (dishId: string) => {
     const dish = dishes.find(d => d.id === dishId)

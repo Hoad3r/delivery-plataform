@@ -47,11 +47,6 @@ export default function MenuItems() {
   useEffect(() => {
     let filtered = dishes
 
-    // LOG: pratos disponíveis antes do filtro
-    console.log('Dishes disponíveis:', dishes.length)
-    console.log('Filtro de categoria:', categoryFilter)
-    console.log('Filtro de busca:', searchTerm)
-
     // Aplica filtro de categoria se existir e não estiver em mobile
     if (!isMobile && categoryFilter && categoryFilter !== "all") {
       filtered = filtered.filter((item) => {
@@ -59,9 +54,7 @@ export default function MenuItems() {
         const categoriesArr: string[] = Array.isArray((item as any).categories) ? (item as any).categories : []
         const normalize = (str: string) => str.replace(/\s+/g, '').toLowerCase()
         const filterCategory = normalize(categoryFilter)
-        const match = categoriesArr.some((cat: string) => normalize(cat) === filterCategory)
-        console.log(`Comparando categorias do prato '${item.name}':`, categoriesArr, 'com', filterCategory, '?', match)
-        return match
+        return categoriesArr.some((cat: string) => normalize(cat) === filterCategory)
       })
     }
 
@@ -74,9 +67,6 @@ export default function MenuItems() {
           (Array.isArray((item as any).categories) && (item as any).categories.some((cat: string) => cat.toLowerCase().includes(searchTerm)))
       )
     }
-
-    // LOG: pratos após filtro
-    console.log('Dishes após filtro:', filtered)
 
     setDisplayedItems(filtered)
   }, [categoryFilter, searchTerm, dishes, isMobile])
